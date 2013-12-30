@@ -2,6 +2,7 @@ module heaploop.streams;
 import heaploop.looping;
 import duv.c;
 import duv.types;
+import core.thread;
 
 abstract class Stream {
     private:
@@ -23,6 +24,23 @@ abstract class Stream {
 
         @property uv_stream_t* handle() {
             return _handle;
+        }
+
+        class writeContext {
+            public Fiber fiber;
+            public Stream stream;
+        }
+
+        void write(ubyte[] data) {
+            auto wc = new writeContext;
+            wc.fiber = Fiber.getThis;
+            wc.stream = this;
+            duv_write(this.handle, wc, data, function (uv_stream_t * thisHandle, contextObj, status writeStatus) {
+                    writeStatus.check();
+                    writeContext wc = cast(writeContext)contextObj;
+                    wc.fiber.call;
+            });
+            wc.fiber.yield;
         }
 
     protected:
