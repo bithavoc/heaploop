@@ -5,7 +5,7 @@ import std.stdio;
 
 void main() {
     loop ^ {
-        writeln("hello world inside loop");
+        writeln("hello world inside ", Loop.current);
     };
     writeln("hello world");
 }

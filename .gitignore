@@ -1,2 +1,3 @@
 /out
-/deps
+/deps/duv/
+/deps/events.d/
