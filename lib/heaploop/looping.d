@@ -35,6 +35,9 @@ class Loop {
         void run(RunMode mode) {
             uv_run(_loopPtr, cast(uv_run_mode)mode);
         }
+        @property uv_loop_t* handle() {
+            return _loopPtr;
+        }
 }
 
 FiberedEventList!void loop(RunMode mode = RunMode.Default) {
