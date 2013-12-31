@@ -34,7 +34,6 @@ class TcpStream : Stream
         listenEventList listen(int backlog = 100) {
             if(_listenEvent is null) {
                 _listenEvent = new listenEventList;
-                _listenEvent.Trigger trigger;
                 _listenTrigger = _listenEvent.own((activated) {
                         duv_listen(this.handle, backlog, this, function (uv_stream_t * thisHandle, Object contextObj, status st) {
                             st.check();
