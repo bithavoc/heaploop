@@ -3,6 +3,7 @@ module heaploop.looping;
 import events;
 import duv.c;
 import duv.types;
+import core.thread;
 
 enum RunMode {
   Default = 0,
@@ -50,4 +51,60 @@ FiberedEventList!void loop(RunMode mode = RunMode.Default) {
         }
     });
     return action;
+}
+
+interface Looper {
+    @property Loop loop();
+}
+
+class OperationContext(T:Looper) {
+    private:
+        Fiber _fiber;
+        T _target;
+    public:
+        this(T target) {
+            _fiber = Fiber.getThis;
+            _target = target;
+        }
+    int status;
+    duv_error error;
+
+    void resume(int status = 0) {
+        error = duv_last_error(status, target.loop.handle);
+        fiber.call;
+    }
+
+    @property bool hasError() pure nothrow {
+        return error.isError;
+    }
+
+    @property Fiber fiber() nothrow {
+        return _fiber;
+    }
+
+    @property target() nothrow {
+        return _target;
+    }
+
+    void yield() {
+        fiber.yield;
+    }
+
+    void completed() {
+        error.completed;
+    }
+}
+
+@property bool isError(int status) pure nothrow {
+    return status < 0;
+}
+
+@property bool isError(duv_error error) pure nothrow {
+    return error.name !is null;
+}
+
+void completed(duv_error error) {
+    if(error.isError) {
+        throw new Exception(std.string.format("%s: %s", error.name, error.message));
+    }
 }

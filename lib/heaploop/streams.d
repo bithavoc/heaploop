@@ -5,7 +5,7 @@ import duv.c;
 import duv.types;
 import core.thread;
 
-abstract class Stream {
+abstract class Stream : Looper {
         alias FiberedEventList!(void, Stream, ubyte[]) readEventList;
     private:
         uv_stream_t * _handle;
@@ -30,32 +30,34 @@ abstract class Stream {
             return _handle;
         }
 
-        class writeContext {
-            public Fiber fiber;
-            public Stream stream;
-        }
-
         void write(ubyte[] data) {
-            auto wc = new writeContext;
-            wc.fiber = Fiber.getThis;
-            wc.stream = this;
+            auto wc = new OperationContext!Stream(this);
             duv_write(this.handle, wc, data, function (uv_stream_t * thisHandle, contextObj, status writeStatus) {
-                    writeStatus.check();
-                    writeContext wc = cast(writeContext)contextObj;
-                    wc.fiber.call;
+                    auto wc = cast(OperationContext!Stream)contextObj;
+                    wc.resume(writeStatus);
             });
-            wc.fiber.yield;
+            wc.yield;
+            wc.completed;
         }
 
         readEventList read() {
             _readEvent = new readEventList;
             _readTrigger = _readEvent.own((activated) {
+                auto rx = new OperationContext!Stream(this);
                 if(activated) {
-                    duv_read_start(this.handle, this, function (uv_stream_t * client_conn, Object readContext, size_t nread, ubyte[] data) {
-                        Stream thisStream = cast(Stream)readContext;
-                        thisStream._readTrigger(thisStream, data);
-                        return;
+                    duv_read_start(this.handle, rx, function (uv_stream_t * client_conn, Object readContext, ptrdiff_t nread, ubyte[] data) {
+                        std.stdio.writeln("read %d", nread, data);
+                        auto rx = cast(OperationContext!Stream)readContext;
+                        Stream thisStream = rx.target;
+                        int status = cast(int)nread;
+                        if(status.isError) {
+                            rx.resume(status);
+                        } else {
+                            thisStream._readTrigger(thisStream, data);
+                        }
                     });
+                    rx.yield;
+                    rx.completed;
                 } else {
                     duv_read_stop(this.handle);
                 }
@@ -63,20 +65,14 @@ abstract class Stream {
             return _readEvent;
         }
 
-        class closeContext {
-            public Fiber fiber;
-            public Stream stream;
-        }
-
         void close() {
-            closeContext cx = new closeContext;
-            cx.fiber = Fiber.getThis;
-            cx.stream = this;
+            auto cx = new OperationContext!Stream(this);
             duv_handle_close(cast(uv_handle_t*)this.handle, cx, function (uv_handle_t * handle, context) {
-                    closeContext cx = cast(closeContext)context;
-                    cx.fiber.call;
+                    auto cx = cast(OperationContext!Stream)context;
+                    cx.resume;
             });
-            cx.fiber.yield;
+            cx.yield;
+            cx.completed;
         }
 
     protected:

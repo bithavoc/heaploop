@@ -9,18 +9,24 @@ void main() {
     loop ^ {
         auto server = new TcpStream;
         server.bind4("0.0.0.0", 3000);
+        "bound".writeln;
+        "listening localhost:3000".writeln;
         server.listen ^ (client) {
             writeln("New client has arrived");
             client.write(cast(ubyte[])"hello world 1 \n");
             client.write(cast(ubyte[])"hello world 2 \n");
-            client.read ^ (readStream, data) {
-                "read some cool data: ".writeln(data);
-                if(data == [10]) {
-                    readStream.close;
-                }
-            };
+            try {
+                client.read ^ (readStream, data) {
+                    "read some cool data: ".writeln(data);
+                    if(data == [10]) {
+                        readStream.close;
+                    }
+                };
+            } catch(Exception readEx) {
+                writeln("read error: ", readEx.msg);
+            }
+            writeln("continuing after read");
         };
-        writeln("hello world inside ", Loop.current);
     };
     writeln("hello world");
 }
