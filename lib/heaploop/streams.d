@@ -42,7 +42,7 @@ abstract class Stream : Looper {
 
         readEventList read() {
             _readEvent = new readEventList;
-            _readTrigger = _readEvent.own((activated) {
+            _readTrigger = _readEvent.own((trigger, activated) {
                 auto rx = new OperationContext!Stream(this);
                 if(activated) {
                     duv_read_start(this.handle, rx, function (uv_stream_t * client_conn, Object readContext, ptrdiff_t nread, ubyte[] data) {

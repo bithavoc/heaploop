@@ -44,7 +44,7 @@ class Loop {
 FiberedEventList!void loop(RunMode mode = RunMode.Default) {
     auto action = new FiberedEventList!void;
     action.Trigger trigger;
-    trigger = action.own((activated) {
+    trigger = action.own((trigger, activated) {
         if(activated) {
             trigger();
             Loop.current.run(RunMode.Default);
@@ -105,6 +105,27 @@ class OperationContext(T:Looper) {
 
 void completed(duv_error error) {
     if(error.isError) {
-        throw new Exception(std.string.format("%s: %s", error.name, error.message));
+        throw new LoopException(error.name, error.message);
     }
+}
+
+class LoopException : Exception
+{
+    private:
+        string _name;
+
+    public:
+        this(string msg, string name, string file = __FILE__, size_t line = __LINE__, Throwable next = null) {
+            super(msg, file, line, next);
+            _name = name;
+        }
+
+        @property string name() pure nothrow {
+            return _name;
+        }
+
+        override string toString() {
+            return std.string.format("%s: %s", this.name, this.msg);
+        }
+
 }

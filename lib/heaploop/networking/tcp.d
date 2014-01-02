@@ -35,7 +35,7 @@ class TcpStream : Stream
             if(_listenEvent is null) {
                 _listenEvent = new listenEventList;
                 auto lc = new OperationContext!TcpStream(this);
-                _listenTrigger = _listenEvent.own((activated) {
+                _listenTrigger = _listenEvent.own((trigger, activated) {
                         if(activated) {
                             duv_listen(this.handle, backlog, lc, function (uv_stream_t * thisHandle, Object contextObj, int status) {
                                 auto lc = cast(OperationContext!TcpStream)contextObj;
