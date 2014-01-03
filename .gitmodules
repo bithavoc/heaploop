@@ -4,3 +4,6 @@
 [submodule "deps/events.d"]
 	path = deps/events.d
 	url = git@github.com:heapsource/events.d.git
+[submodule "deps/http-parser.d"]
+	path = deps/http-parser.d
+	url = git@github.com:heapsource/http-parser.d.git

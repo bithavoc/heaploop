@@ -105,7 +105,7 @@ class OperationContext(T:Looper) {
 
 void completed(duv_error error) {
     if(error.isError) {
-        throw new LoopException(error.name, error.message);
+        throw new LoopException(error.message, error.name);
     }
 }
 
