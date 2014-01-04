@@ -15,11 +15,13 @@ void main() {
             writeln("HTTP Agent just connected");
 
             connection.process ^ (request, response) {
-                writeln("Processing ", request.method, request.rawUri);
+                writeln("Processing ", request.method, request.rawUri, " as protocol version ", request.protocolVersion.toString);
                 response.write("Hello World from heaploop");
                 response.write("something else");
                 response.end;
                 writeln("Ended");
+                core.memory.GC.collect;
+                core.memory.GC.minimize;
             };
 
             writeln("continuing after process");

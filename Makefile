@@ -45,6 +45,12 @@ deps/http-parser.d:
 	cp deps/http-parser.d/out/http-parser.a out/http-parser.a
 	cp -r deps/http-parser.d/out/di/* out/di
 
+rparser: deps/http-parser.d/lib/http/parser/*.d deps/http-parser.d/src/*.c
+	mkdir -p out/di
+	(cd deps/http-parser.d; $(MAKE) )
+	cp deps/http-parser.d/out/http-parser.a out/http-parser.a
+	cp -r deps/http-parser.d/out/di/* out/di
+
 clean:
 	rm -rf out/*
 	rm -rf deps/*

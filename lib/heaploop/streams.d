@@ -25,6 +25,10 @@ abstract class Stream : Looper {
             this.init();
         }
 
+        ~this() {
+            debug std.stdio.writeln("Destroying stream");
+        }
+
         @property Loop loop() {
             return _loop;
         }
@@ -49,7 +53,6 @@ abstract class Stream : Looper {
                 auto rx = new OperationContext!Stream(this);
                 if(activated) {
                     duv_read_start(_handle, rx, (uv_stream_t * client_conn, Object readContext, ptrdiff_t nread, ubyte[] data) {
-                        debug std.stdio.writeln("read %d", nread, data);
                         auto rx = cast(OperationContext!Stream)readContext;
                         Stream thisStream = rx.target;
                         int status = cast(int)nread;
@@ -76,6 +79,7 @@ abstract class Stream : Looper {
         }
 
         void close() {
+            closeCleanup();
             auto cx = new OperationContext!Stream(this);
             duv_handle_close(cast(uv_handle_t*)this.handle, cx, function (uv_handle_t * handle, context) {
                     auto cx = cast(OperationContext!Stream)context;
