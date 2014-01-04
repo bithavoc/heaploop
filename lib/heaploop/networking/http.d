@@ -109,7 +109,6 @@ class HttpResponse {
 
         void write(ubyte[] data) {
             _ensureHeadersSent();
-            debug std.stdio.writeln("writting ", data.length);
             _connection.stream.write((cast(ubyte[])format("%x\r\n", data.length)));
             _connection.stream.write(data ~ cast(ubyte[])"\r\n");
         }

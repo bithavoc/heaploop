@@ -4,6 +4,9 @@ import events;
 import duv.c;
 import duv.types;
 import core.thread;
+debug {
+    import std.stdio;
+}
 
 abstract class Stream : Looper {
         alias FiberedEventList!(void, Stream, ubyte[]) readEventList;
@@ -18,7 +21,7 @@ abstract class Stream : Looper {
         this(Loop loop, uv_handle_type type) {
             import std.c.stdlib : malloc;
             _loop = loop;
-            _handle = cast(uv_stream_t*)malloc(uv_handle_size(type));
+            _handle = cast(uv_stream_t*)duv__handle_alloc(type);
             this.init();
         }
 
@@ -45,8 +48,8 @@ abstract class Stream : Looper {
             _readTrigger = _readEvent.own((trigger, activated) {
                 auto rx = new OperationContext!Stream(this);
                 if(activated) {
-                    duv_read_start(this.handle, rx, function (uv_stream_t * client_conn, Object readContext, ptrdiff_t nread, ubyte[] data) {
-                        std.stdio.writeln("read %d", nread, data);
+                    duv_read_start(_handle, rx, (uv_stream_t * client_conn, Object readContext, ptrdiff_t nread, ubyte[] data) {
+                        debug std.stdio.writeln("read %d", nread, data);
                         auto rx = cast(OperationContext!Stream)readContext;
                         Stream thisStream = rx.target;
                         int status = cast(int)nread;
@@ -57,7 +60,14 @@ abstract class Stream : Looper {
                         }
                     });
                     rx.yield;
-                    rx.completed;
+                    try {
+                        rx.completed;
+                    } catch(LoopException lex) {
+                        if(lex.name == "EOF") {
+                            closeCleanup();
+                        }
+                        throw lex;
+                    }
                 } else {
                     duv_read_stop(this.handle);
                 }
@@ -73,6 +83,10 @@ abstract class Stream : Looper {
             });
             cx.yield;
             cx.completed;
+        }
+
+        void closeCleanup() {
+            duv_read_stop(this.handle);
         }
 
     protected:

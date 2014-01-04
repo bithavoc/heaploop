@@ -18,7 +18,7 @@ heaploop: lib/**/*.d deps/duv deps/events.d deps/http-parser.d
 	cd lib; $(DC) -debug -g -gc -Hd../out/di/ -of$(lib_build_params) -op -c heaploop/*.d heaploop/networking/*.d $(lib_build_params) $(DFLAGS)
 	ar -r out/heaploop.a out/heaploop.o
 
-.PHONY: clean
+.PHONY: clean rduv
 
 deps/events.d:
 	@echo "Compiling deps/events.d"
