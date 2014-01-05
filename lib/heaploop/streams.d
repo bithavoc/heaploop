@@ -13,8 +13,6 @@ abstract class Stream : Looper {
     private:
         uv_stream_t * _handle;
         Loop _loop;
-        readEventList _readEvent;
-        readEventList.Trigger _readTrigger;
         bool _isReading;
 
     public:
@@ -49,40 +47,35 @@ abstract class Stream : Looper {
             debug std.stdio.writeln("Write completed");
         }
 
-        readEventList read() {
-            _readEvent = new readEventList;
-            _readTrigger = _readEvent.own((trigger, activated) {
-                auto rx = new OperationContext!Stream(this);
-                if(activated) {
-                    rx.target._isReading = true;
-                    duv_read_start(_handle, rx, (uv_stream_t * client_conn, Object readContext, ptrdiff_t nread, ubyte[] data) {
-                        auto rx = cast(OperationContext!Stream)readContext;
-                        Stream thisStream = rx.target;
-                        int status = cast(int)nread;
+        ubyte[] _readData;
+        ubyte[] read() {
+            auto rx = new OperationContext!Stream(this);
+            rx.target._isReading = true;
+            duv_read_start(_handle, rx, (uv_stream_t * client_conn, Object readContext, ptrdiff_t nread, ubyte[] data) {
+                    auto rx = cast(OperationContext!Stream)readContext;
+                    Stream thisStream = rx.target;
+                    int status = cast(int)nread;
+                    thisStream._readData = data;
 
-                        if(status.isError) {
-                            debug std.stdio.writeln("read callback error");
-                            rx.resume(status);
-                        } else {
-                            thisStream._readTrigger(thisStream, data);
-                        }
-                    });
-                    debug std.stdio.writeln("read (activated block) will yield");
-                    rx.yield;
-                    debug std.stdio.writeln("read (activated block) continue after yield");
-                    rx.target._isReading = false;
-                    duv_read_stop(this.handle);
-                    rx.completed;
-                } else {
-                    debug std.stdio.writeln("read deactivation");
-                    rx.resume;
-                }
+                    if(status.isError) {
+                        debug std.stdio.writeln("read callback error");
+                        rx.resume(status);
+                    } else {
+                        //thisStream._readTrigger(thisStream, data);
+                        rx.resume;
+                    }
             });
-            return _readEvent;
+            debug std.stdio.writeln("read (activated block) will yield");
+            rx.yield;
+            debug std.stdio.writeln("read (activated block) continue after yield");
+            rx.completed;
+            rx.target._isReading = false;
+            duv_read_stop(this.handle);
+            return _readData;
         }
 
         void stopReading() {
-            if(_readTrigger) {
+            /*if(_readTrigger) {
                 debug std.stdio.writeln("stopReading: reseting trigger");
                 auto t = _readTrigger;
                 _readEvent = null;
@@ -90,7 +83,7 @@ abstract class Stream : Looper {
                 t.reset();
             } else {
                 debug std.stdio.writeln("(stopReading had no effect");
-            }
+            }*/
         }
 
         void close() {

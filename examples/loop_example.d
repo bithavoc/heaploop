@@ -16,12 +16,13 @@ void main() {
             client.write(cast(ubyte[])"hello world 1 \n");
             client.write(cast(ubyte[])"hello world 2 \n");
             try {
-                client.read ^ (readStream, data) {
+                while(true) {
+                    ubyte[] data = client.read;
                     "read some cool data: ".writeln(data);
                     if(data == [10]) {
-                        readStream.stopReading;
+                        break;
                     }
-                };
+                }
             } catch(Exception readEx) {
                 writeln("read error: ", readEx.msg);
             }

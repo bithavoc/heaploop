@@ -246,10 +246,10 @@ class HttpConnection {
         void _startProcessing() {
             try {
                 debug std.stdio.writeln("Reading to Process HTTP Requests");
-                _stream.read ^ (stream, data) {
-                    //debug std.stdio.writeln("HttpConnection Read: ", cast(string)data);
+                while(true) {
+                    ubyte[] data = _stream.read;
                     _parser.execute(data);
-                };
+                }
             } catch(LoopException lex) {
                 if(lex.name == "EOF")  {
                     debug std.stdio.writeln("Connection closed");
@@ -263,8 +263,8 @@ class HttpConnection {
 
         void _stopProcessing() {
             debug std.stdio.writeln("_Stopping connection, closing stream");
-            _stream.stopReading();
-            //_stream.close();
+            //_stream.stopReading();
+            _stream.close();
         }
 
         void stop() {

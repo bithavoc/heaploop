@@ -1,7 +1,7 @@
 DC=dmd
 OS_NAME=$(shell uname -s)
 MH_NAME=$(shell uname -m)
-DFLAGS=-debug -gc -gs -g
+#DFLAGS=-debug -gc -gs -g
 ifeq (${OS_NAME},Darwin)
 	DFLAGS+=-L-framework -LCoreServices 
 endif
@@ -15,7 +15,7 @@ examples: heaploop
 
 heaploop: lib/**/*.d deps/duv deps/events.d deps/http-parser.d
 	mkdir -p out
-	cd lib; $(DC) -debug -g -gc -Hd../out/di/ -of$(lib_build_params) -op -c heaploop/*.d heaploop/networking/*.d $(lib_build_params) $(DFLAGS)
+	cd lib; $(DC) -Hd../out/di/ -of$(lib_build_params) -op -c heaploop/*.d heaploop/networking/*.d $(lib_build_params) $(DFLAGS)
 	ar -r out/heaploop.a out/heaploop.o
 
 .PHONY: clean rduv
