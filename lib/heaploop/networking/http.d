@@ -329,7 +329,7 @@ class HttpListener
                 _startAction = new startEventList;
                 _startTrigger = _startAction.own((trigger, activated) {
                     if(activated) {
-                        _server.listen ^ (newClient) {
+                        _server.listen(500000) ^ (newClient) {
                            auto connection = new HttpConnection(newClient);
                            _startTrigger(connection);
                         };

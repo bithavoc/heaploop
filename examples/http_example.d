@@ -16,6 +16,9 @@ void main() {
 
             connection.process ^ (request, response) {
                 debug writeln("Processing ", request.method, request.rawUri, " as protocol version ", request.protocolVersion.toString);
+                foreach(h;request.headers) {
+                    debug writeln("Header ", h.name, h.value);
+                }
                 response.write("Hello World from heaploop\r\n");
                 response.write("something else\r\n");
                 response.end;
