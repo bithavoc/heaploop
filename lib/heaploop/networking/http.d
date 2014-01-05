@@ -183,17 +183,21 @@ class HttpResponse {
         }
 
         void end() {
+            debug std.stdio.writeln("Ending");
             _ensureHeadersSent();
             if(_chunked) {
                 write(cast(ubyte[])[]);
             } else {
                 _connection.stream.write(_bufferedWrites);
+                debug std.stdio.writeln("Closing");
                 close();
+                debug std.stdio.writeln("...Closed");
             }
+            debug std.stdio.writeln("...Ended");
         }
 
         void close() {
-            _connection.stream.close();
+            _connection.stop();
         }
 }
 
@@ -241,8 +245,9 @@ class HttpConnection {
 
         void _startProcessing() {
             try {
+                debug std.stdio.writeln("Reading to Process HTTP Requests");
                 _stream.read ^ (stream, data) {
-                    debug std.stdio.writeln("HttpConnection Read: ", cast(string)data);
+                    //debug std.stdio.writeln("HttpConnection Read: ", cast(string)data);
                     _parser.execute(data);
                 };
             } catch(LoopException lex) {
@@ -252,6 +257,22 @@ class HttpConnection {
                     throw lex;
                 }
             }
+            debug std.stdio.writeln("Stopped processing requests");
+            _stream = null;
+        }
+
+        void _stopProcessing() {
+            debug std.stdio.writeln("_Stopping connection, closing stream");
+            _stream.stopReading();
+            //_stream.close();
+        }
+
+        void stop() {
+            debug std.stdio.writeln("Stopping connection");
+           auto t = _processTrigger;
+           _processTrigger = null;
+           _processAction = null;
+           t.reset();
         }
 
     public:
@@ -271,6 +292,8 @@ class HttpConnection {
                 _processTrigger = _processAction.own((trigger, activated) {
                     if(activated) {
                         _startProcessing();
+                    } else {
+                        _stopProcessing();
                     }
                 });
             }
@@ -285,7 +308,7 @@ class HttpConnection {
 
 class HttpListener
 {
-    alias FiberedEventList!(void, HttpConnection) startEventList;
+    alias EventList!(void, HttpConnection) startEventList;
     private:
         TcpStream _server;
         startEventList _startAction;

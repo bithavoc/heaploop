@@ -19,7 +19,7 @@ void main() {
                 client.read ^ (readStream, data) {
                     "read some cool data: ".writeln(data);
                     if(data == [10]) {
-                        readStream.close;
+                        readStream.stopReading;
                     }
                 };
             } catch(Exception readEx) {

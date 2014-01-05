@@ -15,6 +15,7 @@ abstract class Stream : Looper {
         Loop _loop;
         readEventList _readEvent;
         readEventList.Trigger _readTrigger;
+        bool _isReading;
 
     public:
 
@@ -45,6 +46,7 @@ abstract class Stream : Looper {
             });
             wc.yield;
             wc.completed;
+            debug std.stdio.writeln("Write completed");
         }
 
         readEventList read() {
@@ -52,30 +54,43 @@ abstract class Stream : Looper {
             _readTrigger = _readEvent.own((trigger, activated) {
                 auto rx = new OperationContext!Stream(this);
                 if(activated) {
+                    rx.target._isReading = true;
                     duv_read_start(_handle, rx, (uv_stream_t * client_conn, Object readContext, ptrdiff_t nread, ubyte[] data) {
                         auto rx = cast(OperationContext!Stream)readContext;
                         Stream thisStream = rx.target;
                         int status = cast(int)nread;
+
                         if(status.isError) {
+                            debug std.stdio.writeln("read callback error");
                             rx.resume(status);
                         } else {
                             thisStream._readTrigger(thisStream, data);
                         }
                     });
+                    debug std.stdio.writeln("read (activated block) will yield");
                     rx.yield;
-                    try {
-                        rx.completed;
-                    } catch(LoopException lex) {
-                        if(lex.name == "EOF") {
-                            closeCleanup();
-                        }
-                        throw lex;
-                    }
-                } else {
+                    debug std.stdio.writeln("read (activated block) continue after yield");
+                    rx.target._isReading = false;
                     duv_read_stop(this.handle);
+                    rx.completed;
+                } else {
+                    debug std.stdio.writeln("read deactivation");
+                    rx.resume;
                 }
             });
             return _readEvent;
+        }
+
+        void stopReading() {
+            if(_readTrigger) {
+                debug std.stdio.writeln("stopReading: reseting trigger");
+                auto t = _readTrigger;
+                _readEvent = null;
+                _readTrigger = null;
+                t.reset();
+            } else {
+                debug std.stdio.writeln("(stopReading had no effect");
+            }
         }
 
         void close() {
@@ -90,7 +105,7 @@ abstract class Stream : Looper {
         }
 
         void closeCleanup() {
-            duv_read_stop(this.handle);
+            stopReading();
         }
 
     protected:

@@ -16,13 +16,13 @@ void main() {
 
             connection.process ^ (request, response) {
                 writeln("Processing ", request.method, request.rawUri, " as protocol version ", request.protocolVersion.toString);
-                response.write("Hello World from heaploop");
-                response.write("something else");
+                response.write("Hello World from heaploop\r\n");
+                response.write("something else\r\n");
                 response.end;
                 writeln("Ended");
-                core.memory.GC.collect;
-                core.memory.GC.minimize;
             };
+            core.memory.GC.collect;
+            core.memory.GC.minimize;
 
             writeln("continuing after process");
         };

@@ -70,8 +70,12 @@ class OperationContext(T:Looper) {
     duv_error error;
 
     void resume(int status = 0) {
+        debug std.stdio.writeln("Trying to resume while the fiber is in state ", _fiber.state);
+        if(_fiber.state != Fiber.State.HOLD) {
+            return;
+        }
         error = duv_last_error(status, target.loop.handle);
-        fiber.call;
+        _fiber.call;
     }
 
     @property bool hasError() pure nothrow {
@@ -128,4 +132,45 @@ class LoopException : Exception
             return std.string.format("%s: %s", this.name, this.msg);
         }
 
+}
+
+alias void delegate() CheckDelegate;
+class Check {
+    private:
+        CheckDelegate _delegate;
+        uv_check_t * _handle;
+        bool _started;
+        Loop _loop;
+    public:
+        this(Loop loop = Loop.current) {
+            _loop = loop;
+            _handle = uv_handle_alloc!(uv_handle_type.CHECK); 
+            uv_check_init(_loop.handle, _handle).duv_last_error(_loop.handle).completed;
+        }
+
+        void start(CheckDelegate del) {
+            stop();
+            _delegate = del;
+            duv_check_start(_handle, this, (h, c, s) {
+               Check self = cast(Check)c; 
+               self._delegate();
+            });
+        }
+
+        void stop() {
+            if(!_started) return;
+            duv_check_stop(_handle);
+        }
+
+        @property bool started() {
+            return _started;
+        }
+
+        @property uv_check_t * handle() {
+            return _handle;
+        }
+
+        ~this() {
+            stop();
+        }
 }
