@@ -5,16 +5,41 @@ import duv.c;
 import duv.types;
 import events;
 
+void heaploop_tcp_stream_listen_cb(uv_stream_t * thisHandle, Object contextObj, int status) {
+    TcpStream stream = cast(TcpStream)contextObj;
+    if(stream._acceptContext !is null) {
+        // resume inmediately
+        stream._acceptContext.resume(status);
+    } else {
+        stream._acceptPending = true;
+        if(status.isError) {
+            stream._listenError = duv_last_error(status, stream.loop.handle);
+        }
+        // let go, wait for .accept to accept
+    }
+}
 class TcpStream : Stream
 {
     alias FiberedEventList!(void, TcpStream) listenEventList;
     private:
-        listenEventList _listenEvent;
-        listenEventList.Trigger _listenTrigger;
+        bool _listening;
+        OperationContext!TcpStream _acceptContext;
+        duv_error _listenError;
+        bool _acceptPending;
+
+
     protected:
 
         override void init() {
             uv_tcp_init(this.loop.handle, cast(uv_tcp_t*)this.handle).duv_last_error(this.loop.handle).completed();
+        }
+        TcpStream _acceptNow() {
+            TcpStream client = new TcpStream(this.loop);
+            int acceptStatus = uv_accept(this.handle, cast(uv_stream_t*)client.handle);
+            if(acceptStatus.isError) {
+                acceptStatus.duv_last_error(this.loop.handle).completed;
+            }
+            return client;
         }
 
     public:
@@ -31,6 +56,33 @@ class TcpStream : Stream
             duv_tcp_bind4(cast(uv_tcp_t*)handle, std.string.toStringz(address), port).duv_last_error(this.loop.handle).completed();
         }
 
+        @property bool isListening() {
+            return _listening;
+        }
+
+        void listen(int backlog) {
+            if(_listening) {
+                throw new Exception("Stream already listening");
+            }
+            duv_listen(this.handle, backlog, this, &heaploop_tcp_stream_listen_cb).duv_last_error(this.loop.handle).completed();
+            _listening = true;
+        }
+
+        TcpStream accept() {
+            if(_acceptPending) {
+                if(_listenError.hasError) {
+                    auto err = _listenError;
+                    _listenError = _listenError.init;
+                    err.completed;
+                }
+                return _acceptNow();
+            }
+            _acceptContext  = new OperationContext!TcpStream(this);
+            _acceptContext.yield;
+            _acceptContext.completed;
+            return _acceptNow();
+        }
+/*
         listenEventList listen(int backlog = 100) {
             if(_listenEvent is null) {
                 _listenEvent = new listenEventList;
@@ -61,5 +113,6 @@ class TcpStream : Stream
             }
             return _listenEvent;
         }
+        */
 }
 

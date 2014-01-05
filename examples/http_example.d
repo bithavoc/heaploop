@@ -11,7 +11,8 @@ void main() {
         server.bind4("0.0.0.0", 3000);
         "bound".writeln;
         "listening http://localhost:3000".writeln;
-        server.start ^ (connection) {
+        while(true) {
+            HttpConnection connection = server.accept;
             debug writeln("HTTP Agent just connected");
 
             connection.process ^ (request, response) {
@@ -28,7 +29,7 @@ void main() {
             //core.memory.GC.minimize;
 
             debug writeln("continuing after process");
-        };
+        }
     };
     writeln("hello world");
 }

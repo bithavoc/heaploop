@@ -1,7 +1,7 @@
 DC=dmd
 OS_NAME=$(shell uname -s)
 MH_NAME=$(shell uname -m)
-#DFLAGS=-debug -gc -gs -g
+DFLAGS=-debug -gc -gs -g
 ifeq (${OS_NAME},Darwin)
 	DFLAGS+=-L-framework -LCoreServices 
 endif

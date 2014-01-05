@@ -11,7 +11,9 @@ void main() {
         server.bind4("0.0.0.0", 3000);
         "bound".writeln;
         "listening localhost:3000".writeln;
-        server.listen ^ (client) {
+        server.listen(50000);
+        while(true) {
+            auto client = server.accept;
             writeln("New client has arrived");
             client.write(cast(ubyte[])"hello world 1 \n");
             client.write(cast(ubyte[])"hello world 2 \n");
@@ -27,7 +29,7 @@ void main() {
                 writeln("read error: ", readEx.msg);
             }
             writeln("continuing after read");
-        };
+        }
     };
     writeln("hello world");
 }

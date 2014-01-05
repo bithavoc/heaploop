@@ -311,8 +311,6 @@ class HttpListener
     alias EventList!(void, HttpConnection) startEventList;
     private:
         TcpStream _server;
-        startEventList _startAction;
-        startEventList.Trigger _startTrigger;
 
     public:
         this() {
@@ -324,19 +322,14 @@ class HttpListener
             return cast(TThis)this;
         }
 
-        startEventList start() {
-            if(_startTrigger is null) {
-                _startAction = new startEventList;
-                _startTrigger = _startAction.own((trigger, activated) {
-                    if(activated) {
-                        _server.listen(500000) ^ (newClient) {
-                           auto connection = new HttpConnection(newClient);
-                           _startTrigger(connection);
-                        };
-                    }
-                });
+        HttpConnection accept() {
+            if(!_server.isListening) {
+                _server.listen(500000);
             }
-            return _startAction;
+            while(true) {
+                auto newClient = _server.accept;
+                auto connection = new HttpConnection(newClient);
+                return connection;
+            }
         }
-        
 }
