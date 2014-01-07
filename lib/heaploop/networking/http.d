@@ -262,6 +262,7 @@ class HttpConnection {
         }
 
         void _stopProcessing() {
+            if(_stream is null) return;
             debug std.stdio.writeln("_Stopping connection, closing stream");
             _stream.stopReading();
             _stream.close();
@@ -333,14 +334,10 @@ class HttpListener
             return cast(TThis)this;
         }
 
-        HttpConnection accept() {
-            if(!_server.isListening) {
-                _server.listen(500000);
-            }
-            while(true) {
-                auto newClient = _server.accept;
-                auto connection = new HttpConnection(newClient);
-                return connection;
-            }
+        void accept(void delegate(HttpConnection connection) callback) {
+            _server.listen(50000, (client) {
+                auto connection = new HttpConnection(client);
+                callback(connection);
+            });
         }
 }

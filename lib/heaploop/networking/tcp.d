@@ -5,7 +5,7 @@ import duv.c;
 import duv.types;
 import events;
 
-void heaploop_tcp_stream_listen_cb(uv_stream_t * thisHandle, Object contextObj, int status) {
+/*void heaploop_tcp_stream_listen_cb(uv_stream_t * thisHandle, Object contextObj, int status) {
     TcpStream stream = cast(TcpStream)contextObj;
     if(stream._acceptContext !is null) {
         // resume inmediately
@@ -17,15 +17,15 @@ void heaploop_tcp_stream_listen_cb(uv_stream_t * thisHandle, Object contextObj, 
         }
         // let go, wait for .accept to accept
     }
-}
+}*/
 class TcpStream : Stream
 {
     alias FiberedEventList!(void, TcpStream) listenEventList;
     private:
         bool _listening;
-        OperationContext!TcpStream _acceptContext;
+        /*OperationContext!TcpStream _acceptContext;
         duv_error _listenError;
-        bool _acceptPending;
+        bool _acceptPending;*/
 
 
     protected:
@@ -34,14 +34,23 @@ class TcpStream : Stream
             uv_tcp_init(this.loop.handle, cast(uv_tcp_t*)this.handle).duv_last_error(this.loop.handle).completed();
             debug std.stdio.writeln("TCP handle initialized");
         }
-        TcpStream _acceptNow() {
+
+        class acceptOperationContext : OperationContext!TcpStream {
+            public:
+                TcpStream client;
+                this(TcpStream target) {
+                    super(target);
+                }
+        }
+
+        /*TcpStream _acceptNow() {
             TcpStream client = new TcpStream(this.loop);
             int acceptStatus = uv_accept(this.handle, cast(uv_stream_t*)client.handle);
             if(acceptStatus.isError) {
                 acceptStatus.duv_last_error(this.loop.handle).completed;
             }
             return client;
-        }
+        }*/
 
     public:
 
@@ -52,9 +61,6 @@ class TcpStream : Stream
         this(Loop loop) {
             super(loop, uv_handle_type.TCP);
         }
-        ~this() {
-            std.stdio.writeln("Destroying TCP stream");
-        }
 
         void bind4(string address, int port) {
             duv_tcp_bind4(cast(uv_tcp_t*)handle, std.string.toStringz(address), port).duv_last_error(this.loop.handle).completed();
@@ -64,14 +70,40 @@ class TcpStream : Stream
             return _listening;
         }
 
-        void listen(int backlog) {
+        void listen(int backlog, void delegate(TcpStream) callback) {
             if(_listening) {
                 throw new Exception("Stream already listening");
             }
-            duv_listen(this.handle, backlog, this, &heaploop_tcp_stream_listen_cb).duv_last_error(this.loop.handle).completed();
             _listening = true;
+            auto cx = new acceptOperationContext(this);
+            duv_listen(this.handle, backlog, cx, function (uv_stream_t* thisHandle, Object contextObj, int status) {
+                auto cx = cast(acceptOperationContext)contextObj;
+                if(status.isError) {
+                    cx.resume(status);    
+                    return;
+                } else {
+                    TcpStream client = new TcpStream(cx.target.loop);
+                    int acceptStatus = uv_accept(cx.target.handle, cast(uv_stream_t*)client.handle);
+                    if(acceptStatus.isError) {
+                        delete client;
+                    } else {
+                        cx.client = client;
+                    }
+                    new Check().start((check){
+                        cx.resume(acceptStatus);
+                        check.stop;
+                    });
+                    return;
+                }
+            }).duv_last_error(this.loop.handle).completed();
+            while(true) {
+                cx.yield;
+                cx.completed;
+                callback(cx.client);
+            }
         }
 
+        /*
         TcpStream accept() {
             if(_acceptPending) {
                 if(_listenError.hasError) {
@@ -88,6 +120,7 @@ class TcpStream : Stream
             delete _acceptContext;
             return _acceptNow();
         }
+        */
 /*
         listenEventList listen(int backlog = 100) {
             if(_listenEvent is null) {

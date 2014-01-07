@@ -26,10 +26,6 @@ abstract class Stream : Handle {
         this(Loop loop, uv_handle_type type) {
             super(loop, type);
         }
-
-        ~this() {
-            std.stdio.writeln("Destroying stream");
-        }
         
         @property uv_stream_t* handle() {
             return cast(uv_stream_t*)super.handle;
@@ -49,11 +45,14 @@ abstract class Stream : Handle {
             debug std.stdio.writeln("Write completed");
         }
 
+        @property bool isReading() pure nothrow {
+            return _isReading;
+        }
 
         ubyte[] read() {
             ensureOpen;
+            _isReading = true;
             auto rx = new readOperationContext(this);
-            rx.target._isReading = true;
             duv_read_start(this.handle, rx, (uv_stream_t * client_conn, Object readContext, ptrdiff_t nread, ubyte[] data) {
                     auto rx = cast(readOperationContext)readContext;
                     Stream thisStream = rx.target;
@@ -65,17 +64,17 @@ abstract class Stream : Handle {
                     });
             });
             scope (exit) delete rx;
+            scope (exit) _isReading = false;
             debug std.stdio.writeln("read (activated block) will yield");
             rx.yield;
             debug std.stdio.writeln("read (activated block) continue after yield");
             duv_read_stop(this.handle);
-            rx.target._isReading = false;
             try {
                 rx.completed;
             } catch(LoopException lex) {
                 if(lex.name == "EOF") {
                     debug std.stdio.writeln("EOF detected, forcing close");
-                    close(true);
+                    close();
                     throw lex;
                 }
             }
@@ -83,6 +82,10 @@ abstract class Stream : Handle {
         }
 
         void stopReading() {
+            if(_isReading) {
+                debug std.stdio.writeln("stopReading");
+                duv_read_stop(this.handle);
+            }
             /*if(_readTrigger) {
                 debug std.stdio.writeln("stopReading: reseting trigger");
                 auto t = _readTrigger;

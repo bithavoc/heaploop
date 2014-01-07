@@ -18,9 +18,7 @@ void main() {
             server.bind4("0.0.0.0", 3000);
             "bound".writeln;
             "listening localhost:3000".writeln;
-            server.listen(50000);
-            while(true) {
-                    scope client = server.accept;
+            server.listen(50000, (client) {
                     writeln("New client has arrived");
                     writeln("Writing something");
                     client.write(cast(ubyte[])"hello world 1 \n");
@@ -38,7 +36,7 @@ void main() {
                         writeln("read error: ", readEx.msg);
                     }
                     writeln("continuing after read");
-            }
+            });
         };
     } catch(Exception ex) {
         writeln("accept loop error: ", ex);
