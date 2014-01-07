@@ -258,21 +258,32 @@ class HttpConnection {
                 }
             }
             debug std.stdio.writeln("Stopped processing requests");
-            _stream = null;
+            _stopProcessing();
         }
 
         void _stopProcessing() {
             debug std.stdio.writeln("_Stopping connection, closing stream");
-            //_stream.stopReading();
+            _stream.stopReading();
             _stream.close();
+            _stream = null;
+            _parser = null;
+            _currentRequest = null;
+            _currentResponse = null;
+            _currentContext = null;
+            _processTrigger = null;
+            _processAction = null;
+            debug std.stdio.writeln("_Stopping connection, OK");
         }
 
         void stop() {
-            debug std.stdio.writeln("Stopping connection");
+           debug std.stdio.writeln("Stopping connection");
            auto t = _processTrigger;
-           _processTrigger = null;
-           _processAction = null;
+            _processTrigger = null;
+            _processAction = null;
            t.reset();
+        }
+        ~this() {
+           debug std.stdio.writeln("Collecting HttpConnection");
         }
 
     public:

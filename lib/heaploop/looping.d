@@ -65,6 +65,10 @@ class OperationContext(T:Looper) {
         this(T target) {
             _fiber = Fiber.getThis;
             _target = target;
+            debug std.stdio.writeln("new OperationContext");
+        }
+        ~this() {
+            debug std.stdio.writeln("OperationContext destroyed");
         }
     int status;
     duv_error error;
@@ -135,7 +139,7 @@ class LoopException : Exception
 
 }
 
-alias void delegate() CheckDelegate;
+alias void delegate(Check sender) CheckDelegate;
 class Check {
     private:
         CheckDelegate _delegate;
@@ -151,16 +155,19 @@ class Check {
 
         void start(CheckDelegate del) {
             stop();
+            _started = true;
             _delegate = del;
             duv_check_start(_handle, this, (h, c, s) {
                Check self = cast(Check)c; 
-               self._delegate();
+               self._delegate(self);
             });
         }
 
         void stop() {
             if(!_started) return;
+            _delegate = null;
             duv_check_stop(_handle);
+            _started = false;
         }
 
         @property bool started() {
@@ -173,5 +180,81 @@ class Check {
 
         ~this() {
             stop();
+        }
+}
+
+abstract class Handle : Looper {
+    private:
+        uv_handle_t * _handle;
+        Loop _loop;
+        bool _isOpen;
+
+    protected:
+
+        abstract void initializeHandle();
+        
+        void closeCleanup(bool async) {
+
+        }
+
+        void ensureOpen(string callerName = __FUNCTION__) {
+            if(!_isOpen) {
+                throw new LoopException(std.string.format("%s requires the handle to be open", callerName), "CLOSED_HANDLE");
+            }
+        }
+
+
+    public:
+
+        this(Loop loop, uv_handle_type type) {
+            _loop = loop;
+            _handle = duv__handle_alloc(type);
+            _isOpen = true;
+            this.initializeHandle();
+            debug std.stdio.writeln("(Handle just initialized OPEN handle ", _handle, ")");
+        }
+
+        ~this() {
+            debug std.stdio.writeln("Destroying handle");
+            close(true); // close the handle without waiting
+        }
+
+        @property {
+            Loop loop() pure nothrow {
+                return _loop;
+            }
+            bool isOpen() {
+                return _isOpen;
+            }
+            uv_handle_t* handle() pure nothrow {
+                return _handle;
+            }
+        }
+
+        void close(bool async = false) {
+            if(!_isOpen) {
+                return;
+            }
+            debug std.stdio.writeln("(about to CLOSE handle ", _handle, ")");
+            closeCleanup(async);
+            _isOpen = false;
+            if(async) {
+                debug std.stdio.writeln("closing handle async");
+                duv_handle_close(_handle, null, (handle, c) {
+                    debug std.stdio.writeln("closed handle async (Callback)");
+                });
+                debug std.stdio.writeln("closed handle async");
+            } else {
+                auto cx = new OperationContext!Handle(this);
+                duv_handle_close(this.handle, cx, function (uv_handle_t * handle, context) {
+                        auto cx = cast(OperationContext!Handle)context;
+                        cx.resume;
+                });
+                cx.yield;
+                cx.completed;
+                debug std.stdio.writeln("Handle closed sync");
+            }
+            _loop = null;
+            _handle = null;
         }
 }

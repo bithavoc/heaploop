@@ -30,8 +30,9 @@ class TcpStream : Stream
 
     protected:
 
-        override void init() {
+        override void initializeHandle() {
             uv_tcp_init(this.loop.handle, cast(uv_tcp_t*)this.handle).duv_last_error(this.loop.handle).completed();
+            debug std.stdio.writeln("TCP handle initialized");
         }
         TcpStream _acceptNow() {
             TcpStream client = new TcpStream(this.loop);
@@ -50,6 +51,9 @@ class TcpStream : Stream
 
         this(Loop loop) {
             super(loop, uv_handle_type.TCP);
+        }
+        ~this() {
+            std.stdio.writeln("Destroying TCP stream");
         }
 
         void bind4(string address, int port) {
@@ -80,6 +84,8 @@ class TcpStream : Stream
             _acceptContext  = new OperationContext!TcpStream(this);
             _acceptContext.yield;
             _acceptContext.completed;
+            _acceptContext = null;
+            delete _acceptContext;
             return _acceptNow();
         }
 /*
