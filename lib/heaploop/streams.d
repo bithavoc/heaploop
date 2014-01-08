@@ -9,13 +9,14 @@ debug {
 }
 
 abstract class Stream : Handle {
-        alias FiberedEventList!(void, Stream, ubyte[]) readEventList;
     private:
         bool _isReading;
+        readOperationContext _readOperation;
         
         class readOperationContext : OperationContext!Stream {
             public:
                 ubyte[] readData;
+                bool stopped;
                 this(Stream target) {
                     super(target);
                 }
@@ -49,52 +50,58 @@ abstract class Stream : Handle {
             return _isReading;
         }
 
-        ubyte[] read() {
+        Action!(void, ubyte[]) read() {
             ensureOpen;
-            _isReading = true;
-            auto rx = new readOperationContext(this);
-            duv_read_start(this.handle, rx, (uv_stream_t * client_conn, Object readContext, ptrdiff_t nread, ubyte[] data) {
-                    auto rx = cast(readOperationContext)readContext;
-                    Stream thisStream = rx.target;
-                    int status = cast(int)nread;
-                    rx.readData = data;
-                    new Check().start((check){
-                        rx.resume(status);
-                        check.stop;
-                    });
-            });
-            scope (exit) delete rx;
-            scope (exit) _isReading = false;
-            debug std.stdio.writeln("read (activated block) will yield");
-            rx.yield;
-            debug std.stdio.writeln("read (activated block) continue after yield");
-            duv_read_stop(this.handle);
-            try {
-                rx.completed;
-            } catch(LoopException lex) {
-                if(lex.name == "EOF") {
-                    debug std.stdio.writeln("EOF detected, forcing close");
-                    close();
-                    throw lex;
+            return new Action!(void, ubyte[])((trigger) {
+                _isReading = true;
+                auto rx = _readOperation = new readOperationContext(this);
+                duv_read_start(this.handle, rx, (uv_stream_t * client_conn, Object readContext, ptrdiff_t nread, ubyte[] data) {
+                        auto rx = cast(readOperationContext)readContext;
+                        Stream thisStream = rx.target;
+                        int status = cast(int)nread;
+                        rx.readData = data;
+                        new Check().start((check){
+                            rx.resume(status);
+                            check.stop;
+                        });
+                });
+                scope (exit) stopReading();
+                while(true) {
+                    debug std.stdio.writeln("read (activated block) will yield");
+                    rx.yield;
+                    debug std.stdio.writeln("read (activated block) continue after yield");
+                    if(!rx.stopped) {
+                        try {
+                            rx.completed;
+                        } catch(LoopException lex) {
+                            if(lex.name == "EOF") {
+                                debug std.stdio.writeln("EOF detected, forcing close");
+                                close();
+                                break;
+                            } else {
+                                throw lex;
+                            }
+                        }
+                        trigger(rx.readData);
+                    } else {
+                        debug std.stdio.writeln("read was stopped, breaking read loop");
+                        break;
+                    }
                 }
-            }
-            return rx.readData;
+            });
         }
 
         void stopReading() {
             if(_isReading) {
                 debug std.stdio.writeln("stopReading");
                 duv_read_stop(this.handle);
+                _isReading = false;
+                if(_readOperation !is null) {
+                    _readOperation.stopped = true;
+                    _readOperation.resume;
+                }
+                _readOperation = null;
             }
-            /*if(_readTrigger) {
-                debug std.stdio.writeln("stopReading: reseting trigger");
-                auto t = _readTrigger;
-                _readEvent = null;
-                _readTrigger = null;
-                t.reset();
-            } else {
-                debug std.stdio.writeln("(stopReading had no effect");
-            }*/
         }
 
     protected:

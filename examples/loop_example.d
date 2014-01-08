@@ -7,7 +7,7 @@ import std.stdio;
 
 void main() {
     try {
-        loop ^ {
+        loop ^^ {
             new Check().start((c){
                 writeln("Collect begin");
                 core.memory.GC.collect;
@@ -18,25 +18,24 @@ void main() {
             server.bind4("0.0.0.0", 3000);
             "bound".writeln;
             "listening localhost:3000".writeln;
-            server.listen(50000, (client) {
+            server.listen(50000) ^ (client) {
                     writeln("New client has arrived");
                     writeln("Writing something");
                     client.write(cast(ubyte[])"hello world 1 \n");
                     client.write(cast(ubyte[])"hello world 2 \n");
                     writeln("Reading something");
                     try {
-                        while(true) {
-                            ubyte[] data = client.read;
+                        client.read ^ (data) {
                             "read some cool data: ".writeln(data);
                             if(data == [10]) {
-                                break;
+                                client.close;
                             }
-                        }
+                        };
                     } catch(Exception readEx) {
                         writeln("read error: ", readEx.msg);
                     }
                     writeln("continuing after read");
-            });
+            };
         };
     } catch(Exception ex) {
         writeln("accept loop error: ", ex);

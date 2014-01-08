@@ -202,17 +202,17 @@ class HttpResponse {
 }
 
 class HttpConnection {
-    alias FiberedEventList!(void, HttpRequest, HttpResponse) processEventList;
+    alias Action!(void, HttpRequest, HttpResponse) processEventList;
 
     private:
         processEventList _processAction;
-        processEventList.Trigger _processTrigger;
         TcpStream _stream;
         HttpParser _parser;
 
         HttpRequest _currentRequest;
         HttpResponse _currentResponse;
         HttpContext _currentContext;
+        void delegate(HttpRequest, HttpResponse) _processCallback;
 
         void onMessageBegin(HttpParser p) {
             debug std.stdio.writeln("HTTP message began");
@@ -240,16 +240,16 @@ class HttpConnection {
 
         void onMessageComplete(HttpParser p) {
             debug std.stdio.writeln("protocol version set, ", p.protocolVersion.toString);
-            _processTrigger(_currentRequest, _currentResponse);
+            _processCallback(_currentRequest, _currentResponse);
         }
 
-        void _startProcessing() {
+        void _startProcessing(void delegate(HttpRequest, HttpResponse) callback) {
+            _processCallback = callback;
             try {
                 debug std.stdio.writeln("Reading to Process HTTP Requests");
-                while(true) {
-                    ubyte[] data = _stream.read;
+                stream.read ^ (data) {
                     _parser.execute(data);
-                }
+                };
             } catch(LoopException lex) {
                 if(lex.name == "EOF")  {
                     debug std.stdio.writeln("Connection closed");
@@ -271,17 +271,12 @@ class HttpConnection {
             _currentRequest = null;
             _currentResponse = null;
             _currentContext = null;
-            _processTrigger = null;
-            _processAction = null;
             debug std.stdio.writeln("_Stopping connection, OK");
         }
 
         void stop() {
            debug std.stdio.writeln("Stopping connection");
-           auto t = _processTrigger;
-            _processTrigger = null;
-            _processAction = null;
-           t.reset();
+           _stopProcessing;
         }
         ~this() {
            debug std.stdio.writeln("Collecting HttpConnection");
@@ -299,15 +294,10 @@ class HttpConnection {
         }
 
         processEventList process() {
-            if(_processTrigger is null) {
-                _processAction = new processEventList;
-                _processTrigger = _processAction.own((trigger, activated) {
-                    if(activated) {
-                        _startProcessing();
-                    } else {
-                        _stopProcessing();
-                    }
-                });
+            if(_processAction is null) {
+                _processAction = new processEventList((trigger) {
+                    _startProcessing(trigger);
+                });;
             }
             return _processAction;
         }
@@ -320,7 +310,6 @@ class HttpConnection {
 
 class HttpListener
 {
-    alias EventList!(void, HttpConnection) startEventList;
     private:
         TcpStream _server;
 
@@ -334,10 +323,12 @@ class HttpListener
             return cast(TThis)this;
         }
 
-        void accept(void delegate(HttpConnection connection) callback) {
-            _server.listen(50000, (client) {
-                auto connection = new HttpConnection(client);
-                callback(connection);
+        Action!(void, HttpConnection) listen(int backlog = 50000) {
+            return new Action!(void, HttpConnection)((trigger) {
+                _server.listen(backlog) ^ (client) {
+                    auto connection = new HttpConnection(client);
+                    trigger(connection);
+                };
             });
         }
 }

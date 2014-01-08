@@ -5,28 +5,10 @@ import duv.c;
 import duv.types;
 import events;
 
-/*void heaploop_tcp_stream_listen_cb(uv_stream_t * thisHandle, Object contextObj, int status) {
-    TcpStream stream = cast(TcpStream)contextObj;
-    if(stream._acceptContext !is null) {
-        // resume inmediately
-        stream._acceptContext.resume(status);
-    } else {
-        stream._acceptPending = true;
-        if(status.isError) {
-            stream._listenError = duv_last_error(status, stream.loop.handle);
-        }
-        // let go, wait for .accept to accept
-    }
-}*/
 class TcpStream : Stream
 {
-    alias FiberedEventList!(void, TcpStream) listenEventList;
     private:
         bool _listening;
-        /*OperationContext!TcpStream _acceptContext;
-        duv_error _listenError;
-        bool _acceptPending;*/
-
 
     protected:
 
@@ -42,15 +24,6 @@ class TcpStream : Stream
                     super(target);
                 }
         }
-
-        /*TcpStream _acceptNow() {
-            TcpStream client = new TcpStream(this.loop);
-            int acceptStatus = uv_accept(this.handle, cast(uv_stream_t*)client.handle);
-            if(acceptStatus.isError) {
-                acceptStatus.duv_last_error(this.loop.handle).completed;
-            }
-            return client;
-        }*/
 
     public:
 
@@ -70,37 +43,39 @@ class TcpStream : Stream
             return _listening;
         }
 
-        void listen(int backlog, void delegate(TcpStream) callback) {
+        Action!(void, TcpStream) listen(int backlog) {
             if(_listening) {
                 throw new Exception("Stream already listening");
             }
-            _listening = true;
-            auto cx = new acceptOperationContext(this);
-            duv_listen(this.handle, backlog, cx, function (uv_stream_t* thisHandle, Object contextObj, int status) {
-                auto cx = cast(acceptOperationContext)contextObj;
-                if(status.isError) {
-                    cx.resume(status);    
-                    return;
-                } else {
-                    TcpStream client = new TcpStream(cx.target.loop);
-                    int acceptStatus = uv_accept(cx.target.handle, cast(uv_stream_t*)client.handle);
-                    if(acceptStatus.isError) {
-                        delete client;
+            return new Action!(void, TcpStream)((trigger) {
+                _listening = true;
+                auto cx = new acceptOperationContext(this);
+                duv_listen(this.handle, backlog, cx, function (uv_stream_t* thisHandle, Object contextObj, int status) {
+                    auto cx = cast(acceptOperationContext)contextObj;
+                    if(status.isError) {
+                        cx.resume(status);    
+                        return;
                     } else {
-                        cx.client = client;
+                        TcpStream client = new TcpStream(cx.target.loop);
+                        int acceptStatus = uv_accept(cx.target.handle, cast(uv_stream_t*)client.handle);
+                        if(acceptStatus.isError) {
+                            delete client;
+                        } else {
+                            cx.client = client;
+                        }
+                        new Check().start((check){
+                            cx.resume(acceptStatus);
+                            check.stop;
+                        });
+                        return;
                     }
-                    new Check().start((check){
-                        cx.resume(acceptStatus);
-                        check.stop;
-                    });
-                    return;
+                }).duv_last_error(this.loop.handle).completed();
+                while(true) {
+                    cx.yield;
+                    cx.completed;
+                    trigger(cx.client);
                 }
-            }).duv_last_error(this.loop.handle).completed();
-            while(true) {
-                cx.yield;
-                cx.completed;
-                callback(cx.client);
-            }
+            });
         }
 
         /*

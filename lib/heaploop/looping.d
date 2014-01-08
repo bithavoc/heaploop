@@ -41,16 +41,11 @@ class Loop {
         }
 }
 
-FiberedEventList!void loop(RunMode mode = RunMode.Default) {
-    auto action = new FiberedEventList!void;
-    action.Trigger trigger;
-    trigger = action.own((trigger, activated) {
-        if(activated) {
+Action!void loop(RunMode mode = RunMode.Default) {
+    return new Action!void((trigger) {
             trigger();
             Loop.current.run(RunMode.Default);
-        }
     });
-    return action;
 }
 
 interface Looper {
