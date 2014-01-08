@@ -183,6 +183,15 @@ class Check : Handle {
         ~this() {
             stop();
         }
+
+        static Check once(void delegate(Check check) del, Loop loop = Loop.current) {
+            auto check = new Check(loop);
+            check.start((c) {
+                    scope (exit) c.stop;
+                    del(c);
+            });
+            return check;
+        }
 }
 
 abstract class Handle : Looper {

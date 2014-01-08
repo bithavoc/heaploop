@@ -109,7 +109,7 @@ class HttpResponse {
                 } else {
                     lineWrite("Content-Length: %d".format(_bufferedWrites.length));
                 }
-                lineWrite("Connection: close");
+                //lineWrite("Connection: close");
                 lineWrite();
                 _headersSent = true;
             }
@@ -190,7 +190,7 @@ class HttpResponse {
             } else {
                 _connection.stream.write(_bufferedWrites);
                 debug std.stdio.writeln("Closing");
-                close();
+                //close();
                 debug std.stdio.writeln("...Closed");
             }
             debug std.stdio.writeln("...Ended");
@@ -273,11 +273,6 @@ class HttpConnection {
             _currentContext = null;
             debug std.stdio.writeln("_Stopping connection, OK");
         }
-
-        void stop() {
-           debug std.stdio.writeln("Stopping connection");
-           _stopProcessing;
-        }
         ~this() {
            debug std.stdio.writeln("Collecting HttpConnection");
         }
@@ -306,6 +301,10 @@ class HttpConnection {
             return _stream;
         }
 
+        void stop() {
+           debug std.stdio.writeln("Stopping connection");
+           _stopProcessing;
+        }
 }
 
 class HttpListener

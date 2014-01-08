@@ -42,7 +42,12 @@ abstract class Stream : Handle {
             });
             scope (exit) delete wc;
             wc.yield;
-            wc.completed;
+            try {
+                wc.completed;
+            } catch(Exception ex) {
+                close();
+                throw ex;
+            }
             debug std.stdio.writeln("Write completed");
         }
 
@@ -60,9 +65,8 @@ abstract class Stream : Handle {
                         Stream thisStream = rx.target;
                         int status = cast(int)nread;
                         rx.readData = data;
-                        new Check().start((check){
+                        Check.once((check){
                             rx.resume(status);
-                            check.stop;
                         });
                 });
                 scope (exit) stopReading();
