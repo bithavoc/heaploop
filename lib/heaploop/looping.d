@@ -188,6 +188,7 @@ class Check : Handle {
             auto check = new Check(loop);
             check.start((c) {
                     scope (exit) c.stop;
+                    scope (exit) c.close;
                     del(c);
             });
             return check;
@@ -258,4 +259,5 @@ abstract class Handle : Looper {
             debug std.stdio.writeln("closed handle async");
             _loop = null;
         }
+
 }

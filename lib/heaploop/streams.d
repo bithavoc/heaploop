@@ -65,6 +65,10 @@ abstract class Stream : Handle {
                         Stream thisStream = rx.target;
                         int status = cast(int)nread;
                         rx.readData = data;
+                        if(status.isError) {
+                            // we must close inmediately we receive the error and before continue in the fiber
+                            rx.target.close();
+                        }
                         Check.once((check){
                             rx.resume(status);
                         });
@@ -83,6 +87,8 @@ abstract class Stream : Handle {
                                 close();
                                 break;
                             } else {
+                                debug std.stdio.writeln("read detected, forcing close");
+                                close();
                                 throw lex;
                             }
                         }
@@ -96,6 +102,7 @@ abstract class Stream : Handle {
         }
 
         void stopReading() {
+            // [WARNING] might be executed from fiber or thread
             if(_isReading) {
                 debug std.stdio.writeln("stopReading");
                 duv_read_stop(this.handle);
