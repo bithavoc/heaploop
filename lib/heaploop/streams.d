@@ -38,16 +38,16 @@ abstract class Stream : Handle {
             auto wc = new OperationContext!Stream(this);
             duv_write(this.handle, wc, data, function (uv_stream_t * thisHandle, contextObj, status writeStatus) {
                     auto wc = cast(OperationContext!Stream)contextObj;
-                    wc.resume(writeStatus);
+                    wc.update(writeStatus);
+                    if(writeStatus.isError) {
+                        // we must close inmediately we receive the error and before continue in the fiber
+                        wc.target.close();
+                    }
+                    wc.resume();
             });
             scope (exit) delete wc;
             wc.yield;
-            try {
-                wc.completed;
-            } catch(Exception ex) {
-                close();
-                throw ex;
-            }
+            wc.completed;
             debug std.stdio.writeln("Write completed");
         }
 
@@ -61,17 +61,16 @@ abstract class Stream : Handle {
                 _isReading = true;
                 auto rx = _readOperation = new readOperationContext(this);
                 duv_read_start(this.handle, rx, (uv_stream_t * client_conn, Object readContext, ptrdiff_t nread, ubyte[] data) {
-                        auto rx = cast(readOperationContext)readContext;
-                        Stream thisStream = rx.target;
                         int status = cast(int)nread;
+                        auto rx = cast(readOperationContext)readContext;
+                        rx.update(status);
+                        Stream thisStream = rx.target;
                         rx.readData = data;
                         if(status.isError) {
                             // we must close inmediately we receive the error and before continue in the fiber
                             rx.target.close();
                         }
-                        Check.once((check){
-                            rx.resume(status);
-                        });
+                        rx.resume();
                 });
                 scope (exit) stopReading();
                 while(true) {

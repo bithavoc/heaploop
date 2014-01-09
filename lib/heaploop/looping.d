@@ -69,12 +69,16 @@ class OperationContext(T:Looper) {
     duv_error error;
     bool finish;
 
-    void resume(int status = 0) {
+    void update(int status) {
+        this.status = status;
+        error = duv_last_error(this.status, target.loop.handle);
+    }
+
+    void resume() {
         debug std.stdio.writeln("Trying to resume while the fiber is in state ", _fiber.state);
         if(_fiber.state != Fiber.State.HOLD) {
             return;
         }
-        error = duv_last_error(status, target.loop.handle);
         _fiber.call;
     }
 
