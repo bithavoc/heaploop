@@ -17,6 +17,7 @@ build: heaploop
 examples: heaploop
 	cd examples; $(DC) -of../out/loop_example loop_example.d $(lib_build_params) $(DFLAGS)
 	cd examples; $(DC) -of../out/http_example http_example.d $(lib_build_params) $(DFLAGS)
+	cd examples; $(DC) -of../out/tcp_client tcp_client.d $(lib_build_params) $(DFLAGS)
 
 heaploop: lib/**/*.d deps/duv deps/events.d deps/http-parser.d
 	mkdir -p out
