@@ -19,7 +19,7 @@ void main() {
             try {
                 connection.process ^^ (request, response) {
                     try {
-                        debug writeln("Processing ", request.method, request.rawUri, " as protocol version ", request.protocolVersion.toString);
+                        debug writeln("Processing ", request.method, " ",  request.uri.path, " as protocol version ", request.protocolVersion.toString);
                         foreach(h;request.headers) {
                             debug writeln("Header ", h.name, h.value);
                         }

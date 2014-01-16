@@ -32,6 +32,7 @@ private:
 class HttpRequest {
     private:
         string _rawUri;
+        Uri _uri;
         string _method;
         HttpHeader[] _headers;
         HttpContext _context;
@@ -47,6 +48,15 @@ class HttpRequest {
             }
             void rawUri(string uri) {
                 _rawUri = uri;
+            }
+        }
+
+        @property {
+            Uri uri() {
+                return _uri;
+            }
+            void uri(Uri uri) {
+                _uri = uri;
             }
         }
 
@@ -223,6 +233,7 @@ class HttpConnection {
 
         void onUrl(HttpParser p, string uri) {
             _currentRequest.rawUri = uri;
+            _currentRequest.uri = Uri(_currentRequest.rawUri);
         }
 
         void onStatus(HttpParser p, string status) {
