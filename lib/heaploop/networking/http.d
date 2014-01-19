@@ -100,6 +100,7 @@ class HttpRequest {
 class HttpResponse {
     private:
         HttpConnection _connection;
+        HttpHeader[] _headers;
         bool _headersSent;
         uint _statusCode;
         string _statusText;
@@ -116,6 +117,9 @@ class HttpResponse {
             if(!headersSent) {
                 auto stream = _connection.stream;
                 lineWrite("HTTP/%s %d %s".format(_context.request.protocolVersion.toString, _statusCode, _statusText));
+                foreach(header; _headers) {
+                    lineWrite(header.name ~ " : " ~ header.value);
+                }
                 lineWrite("Content-Type: %s; charset=UTF-8".format(_contentType));
                 if(_chunked) {
                     lineWrite("Transfer-Encoding: chunked");
@@ -211,6 +215,17 @@ class HttpResponse {
 
         void close() {
             _connection.stop();
+        }
+
+        void addHeader(string name, string value) {
+            addHeader(HttpHeader(name, value));
+        }
+
+        void addHeader(HttpHeader header) {
+            if(_headersSent) {
+                throw new Exception("HTTP headers already sent. HttpResponse.addHeader can not be used after HttpResponse.end");
+            }
+            _headers ~= header;
         }
 }
 

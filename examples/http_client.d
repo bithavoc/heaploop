@@ -12,6 +12,7 @@ void main() {
             server.listen ^^ (connection) {
                 writeln("New HTTP connection");
                 connection.process ^^ (request, response) {
+                    response.addHeader("X-Server", "Heaploop HTTPClient Example 1.1");
                     writeln("Serving response ", request.uri.path);
                     response.write("Hello World");
                     response.write("Hello World Part II");
