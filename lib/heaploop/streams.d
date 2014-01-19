@@ -73,7 +73,7 @@ abstract class Stream : Handle {
                         rx.resume();
                 });
                 scope (exit) stopReading();
-                while(true) {
+                while(!rx.stopped) {
                     debug std.stdio.writeln("read (activated block) will yield");
                     rx.yield;
                     debug std.stdio.writeln("read (activated block) continue after yield");
@@ -97,6 +97,7 @@ abstract class Stream : Handle {
                         break;
                     }
                 }
+                _readOperation = null;
             });
         }
 
@@ -110,7 +111,6 @@ abstract class Stream : Handle {
                     _readOperation.stopped = true;
                     _readOperation.resume;
                 }
-                _readOperation = null;
             }
         }
 
