@@ -5,6 +5,9 @@ import heaploop.streams;
 import events;
 import std.string : format;
 import http.parser.core;
+debug {
+    import std.stdio : writeln;
+}
 
 class HttpContext {
 private:
@@ -236,9 +239,6 @@ class HttpConnection {
             _currentRequest.uri = Uri(_currentRequest.rawUri);
         }
 
-        void onStatus(HttpParser p, string status) {
-        }
-
         void onHeadersComplete(HttpParser p) {
             _currentRequest.method = p.method;
             _currentRequest.protocolVersion = p.protocolVersion;
@@ -342,3 +342,200 @@ class HttpListener
             });
         }
 }
+
+ushort inferPortForUriSchema(string schema) {
+    switch(schema) {
+        case "http": return 80;
+        default: assert(0, "Unable to infer port number for schema %s".format(schema));
+    }
+}
+
+class HttpRequestMessage
+{
+    private:
+        string _method;
+        HttpVersion _version;
+        Uri _uri;
+
+    public:
+        @property {
+
+            void method(in string m) {
+                _method = m;
+            }
+
+            string method() {
+                return _method;
+            }
+
+            void protocolVersion(in HttpVersion v) {
+                _version = v;
+            }
+
+            HttpVersion protocolVersion() {
+                return _version;
+            }
+
+            Uri uri() {
+                return _uri;
+            }
+
+            void uri(Uri uri) {
+                _uri = uri;
+            }
+
+        }
+
+        void send(TcpStream stream) {
+            string path = null;
+            if(_uri.query !is null) {
+                path = "%s?%s".format(_uri.path, _uri.query);
+            } else {
+                path = _uri.path;
+            }
+            auto writeHeader = delegate void(string s) {
+                stream.write(cast(ubyte[])(s ~ "\r\n"));
+            };
+            writeHeader("%s %s HTTP/%s".format(_method, path, _version.toString));
+            writeHeader("Host: %s".format(_uri.host));
+            writeHeader("");
+            debug writeln("headers send");
+        }
+}
+
+class HttpResponseMessage : Looper
+{
+    private:
+        TcpStream _stream;
+        HttpParser _parser;
+        HttpHeader[] _headers;
+
+        class readOperation : OperationContext!HttpResponseMessage {
+            public:
+               ubyte[] bufferedData;
+               bool stopped;
+               this(HttpResponseMessage target) {
+                   super(target);
+               }
+               @property bool hasBufferedData() {
+                   return bufferedData.length > 0;
+               }
+               ubyte[] consumeBufferedData() {
+                   scope (exit) {
+                       bufferedData = null;
+                   }
+                   return bufferedData;
+               }
+        }
+        readOperation _readOperation;
+
+        readOperation _ensureReadOperation() {
+            if(_readOperation is null) {
+                return _readOperation = new readOperation(this);
+            }
+            return _readOperation;
+        }
+
+        void onHeader(HttpParser parser, HttpHeader header) {
+            _headers ~= header;
+        }
+
+        void onHeadersComplete(HttpParser parser) {
+            debug writeln("Client headers complete, stop reading");
+           _stream.stopReading();
+        }
+        
+        void onMessageComplete(HttpParser parser) {
+            
+        }
+
+        void onBody(HttpParser parser, HttpBodyChunk chunk) {
+            debug writeln("HTTP Response Message: read some data: ", chunk.buffer);
+            auto cx = _ensureReadOperation();
+            cx.bufferedData ~= chunk.buffer;
+            cx.stopped = chunk.isFinal;
+            cx.resume;
+        }
+
+        void readHeaders() {
+            debug writeln("HTTP Response Message: before readHeaders");
+           _stream.read ^ (data) {
+               _parser.execute(data);
+           }; 
+            debug writeln("HTTP Response Message: after readHeaders");
+        }
+
+    public:
+        this(TcpStream stream)
+            in {
+                assert(stream !is null);
+            }
+            body {
+                _parser = new HttpParser(HttpParserType.RESPONSE);
+                _parser.onHeader = &onHeader;
+                _parser.onHeadersComplete = &onHeadersComplete;
+                _parser.onMessageComplete = &onMessageComplete;
+                _parser.onBody = &onBody;
+                //_parser.onUrl = &onUrl;
+                _stream = stream;
+                readHeaders();
+            }
+
+            Action!(void, ubyte[]) read() {
+                return new Action!(void, ubyte[])((a) {
+                   auto cx = _ensureReadOperation();
+                   if(cx.hasBufferedData) {
+                        debug writeln("HTTP Response Message: delivering buffered data");
+                        a(cx.consumeBufferedData());
+                   }
+                   if(!cx.stopped) {
+                       debug writeln("HTTP Response Message: processing more of the body");
+                       _stream.read ^ (data) {
+                            _parser.execute(data);
+                       }; 
+                       debug writeln("HTTP Response Message: continue after response read");
+                       _readOperation = null;
+                   } else {
+                       debug writeln("HTTP Response Message: body was entirely buffered");
+                   }
+                });
+            }
+            @property Loop loop() {
+                return _stream.loop;
+            }
+            @property HttpHeader[] headers() {
+                return _headers;
+            }
+}
+
+class HttpClient 
+{
+    private:
+        TcpStream _stream;
+
+    public:
+
+        this() {
+            _stream = new TcpStream;
+        }
+
+        HttpResponseMessage get(string uri) {
+            return get(Uri(uri));
+        }
+
+        HttpResponseMessage get(Uri uri) {
+            ushort port = uri.port;
+            if(port == 0) {
+                port = inferPortForUriSchema(uri.schema);
+            }
+            _stream.connect4(uri.host, port);
+            auto request = new HttpRequestMessage;
+            request.method = "GET";
+            request.uri = uri;
+            request.protocolVersion = HttpVersion(1,0);
+            debug writeln("about to send headers");
+            request.send(_stream);
+            return new HttpResponseMessage(_stream);
+        }
+}
+

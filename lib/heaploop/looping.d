@@ -111,9 +111,9 @@ class OperationContext(T:Looper) {
     return error.name !is null;
 }
 
-void completed(duv_error error) {
+void completed(duv_error error, string file = __FILE__, size_t line = __LINE__) {
     if(error.isError) {
-        throw new LoopException(error.message, error.name);
+        throw new LoopException(error.message, error.name, file, line);
     }
 }
 
