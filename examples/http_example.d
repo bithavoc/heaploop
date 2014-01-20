@@ -32,7 +32,7 @@ void main() {
                     }
                 };
             } catch(Exception ex) {
-                writeln("something went wrong processing http in dis conn");
+                debug writeln("something went wrong processing http in dis conn");
             } finally {
                 debug writeln("Error happended in http example, stopping connection");
                 //connection.stop;

@@ -12,6 +12,12 @@ void main() {
             server.listen ^^ (connection) {
                 writeln("New HTTP connection");
                 connection.process ^^ (request, response) {
+                    if(request.method == "POST") {
+                        writeln("Serveing POST");
+                        request.read ^ (chunk) {
+                            writeln("POST Chunk ", cast(string)chunk.buffer);
+                        };
+                    }
                     response.addHeader("X-Server", "Heaploop HTTPClient Example 1.1");
                     writeln("Serving response ", request.uri.path);
                     response.write("Hello World");
@@ -28,8 +34,8 @@ void main() {
         foreach(h; response.headers) {
             writeln("=> %s : %s".format(h.name, h.value)); 
         }
-        response.read ^ (read) {
-           writeln("HTTP Response Body: ", cast(string)read); 
+        response.read ^ (chunk) {
+           writeln("HTTP Response Body: ", cast(string)chunk.buffer); 
         };
         writeln("Finished reading");
     };

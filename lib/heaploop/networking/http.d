@@ -9,6 +9,257 @@ debug {
     import std.stdio : writeln;
 }
 
+/*
+ * HTTP Common
+ */
+
+abstract class HttpConnectionBase(TIncomingMessage : HttpIncomingMessage) : Looper {
+    private:
+        TcpStream _stream;
+        HttpParser _parser;
+
+        TIncomingMessage _currentMessage;
+
+        void _onMessageBegin(HttpParser p) {
+            debug std.stdio.writeln("HTTP message began");
+            _currentMessage = createIncomingMessage();
+            onMessageBegin();
+        }
+
+        void onUrl(HttpParser p, string uri) {
+            _currentMessage.rawUri = uri;
+            _currentMessage.uri = Uri(_currentMessage.rawUri);
+        }
+
+        void onHeadersComplete(HttpParser p) {
+            _currentMessage.protocolVersion = p.protocolVersion;
+            debug std.stdio.writeln("protocol version set, ", p.protocolVersion.toString);
+            onBeforeProcess();
+            onProcessMessage();
+        }
+
+        void onBody(HttpParser parser, HttpBodyChunk chunk) {
+            debug writeln("HTTP Response Message: read some BODY data: ", chunk.buffer);
+            auto cx = _currentMessage._ensureReadOperation();
+            cx.buffer(chunk);
+            cx.resume;
+        }
+
+        void onHeader(HttpParser p, HttpHeader header) {
+            _currentMessage.addHeader(header);
+        }
+
+        void onMessageComplete(HttpParser p) {
+            debug std.stdio.writeln("protocol version set, ", p.protocolVersion.toString);
+        }
+
+        void _stopProcessing() {
+            if(_stream is null) return;
+            debug std.stdio.writeln("_Stopping connection, closing stream");
+            _stream.stopReading();
+            _stream.close();
+            _stream = null;
+            _parser = null;
+            debug std.stdio.writeln("_Stopping connection, OK");
+        }
+        ~this() {
+           debug std.stdio.writeln("Collecting HttpConnection");
+        }
+
+package:
+        void write(ubyte[] data) {
+            // TODO: make sure we are not in read mode
+            _stream.write(data);
+        }
+
+    protected:
+        @property {
+            TIncomingMessage currentMessage() nothrow pure {
+                return _currentMessage;
+            }
+
+            HttpParser parser() nothrow pure {
+                return _parser;
+            }
+        }
+
+        abstract TIncomingMessage createIncomingMessage();
+
+        abstract void onMessageBegin();
+
+        abstract void onBeforeProcess();
+        
+        abstract void onProcessMessage();
+
+        void startProcessing() {
+            try {
+                debug std.stdio.writeln("Reading to Process HTTP Requests");
+                _stream.read ^ (data) {
+                    _parser.execute(data);
+                };
+            } catch(LoopException lex) {
+                if(lex.name == "EOF")  {
+                    debug std.stdio.writeln("Connection closed");
+                } else {
+                    throw lex;
+                }
+            }
+            debug std.stdio.writeln("Stopped processing requests");
+            _stopProcessing();
+        }
+
+    public:
+        this(TcpStream stream, HttpParserType parserType) {
+            _stream = stream;
+            _parser = new HttpParser(parserType);
+            _parser.onMessageBegin = &_onMessageBegin;
+            _parser.onHeader = &onHeader;
+            _parser.onHeadersComplete = &onHeadersComplete;
+            _parser.onMessageComplete = &onMessageComplete;
+            _parser.onUrl = &onUrl;
+            _parser.onBody = &onBody;
+        }
+
+
+        void stop() {
+           debug std.stdio.writeln("Stopping connection");
+           _stopProcessing;
+        }
+
+        @property {
+            Loop loop() nothrow pure {
+                return _stream.loop;
+            }
+        }
+}
+
+abstract class HttpMessage : Looper {
+    private:
+        Loop _loop;
+        HttpHeader[] _headers;
+        HttpVersion _version;
+
+    package:
+        this(Loop loop) 
+            in {
+                assert(loop !is null, "loop is required to create HttpMessage");
+            }
+            body {
+                _loop = loop;
+            }
+    public:
+
+        @property {
+            Loop loop() nothrow pure {
+                return _loop;
+            }
+
+            HttpHeader[] headers() nothrow pure {
+                return _headers;
+            }
+        }
+
+        void addHeader(HttpHeader header) {
+            _headers ~= header;
+        }
+
+        void protocolVersion(in HttpVersion v) {
+            _version = v;
+        }
+
+        HttpVersion protocolVersion() {
+            return _version;
+        }
+}
+
+abstract class HttpIncomingMessage : HttpMessage
+{
+    private:
+        string _rawUri;
+        Uri _uri;
+        readOperation _readOperation;
+        HttpConnectionBase!HttpIncomingMessage connection;
+    package:
+
+        class readOperation : OperationContext!HttpIncomingMessage {
+            public:
+               HttpBodyChunk bufferedChunk;
+               bool stopped;
+               this(HttpIncomingMessage target) {
+                   super(target);
+               }
+               @property bool hasBufferedChunk() {
+                   return bufferedChunk.buffer.length > 0;
+               }
+               HttpBodyChunk consumeBufferedChunk() {
+                   scope (exit) {
+                       bufferedChunk = HttpBodyChunk.init;
+                   }
+                   return bufferedChunk;
+               }
+               void buffer(HttpBodyChunk chunk) {
+                   this.bufferedChunk = HttpBodyChunk(bufferedChunk.buffer ~ chunk.buffer, chunk.isFinal);
+                   this.stopped = this.bufferedChunk.isFinal;
+               }
+        }
+
+        readOperation _ensureReadOperation() {
+            if(_readOperation is null) {
+                return _readOperation = new readOperation(this);
+            }
+            return _readOperation;
+        }
+
+
+    public:
+        this(HttpConnection connection)
+            in {
+                assert(connection !is null);
+            }
+            body {
+                super(connection.loop);
+            }
+
+            Action!(void, HttpBodyChunk) read() {
+                return new Action!(void, HttpBodyChunk)((a) {
+                   auto cx = _ensureReadOperation();
+                   do {
+                       if(cx.hasBufferedChunk) {
+                            debug writeln("HTTP Response Message: delivering buffered data");
+                            a(cx.consumeBufferedChunk());
+                       }
+                       if(cx.stopped) {
+                            break;
+                       }
+                       cx.yield;
+                       cx.completed;
+                   } while(cx.hasBufferedChunk);
+                });
+            }
+        @property {
+
+            string rawUri() {
+                return _rawUri;
+            }
+
+            void rawUri(string uri) {
+                _rawUri = uri;
+            }
+
+            Uri uri() {
+                return _uri;
+            }
+
+            void uri(Uri uri) {
+                _uri = uri;
+            }
+        }
+}
+
+/*
+ * HTTP Server
+ */
+
 class HttpContext {
 private:
     HttpRequest _request;
@@ -32,35 +283,15 @@ private:
     }
 }
 
-class HttpRequest {
+class HttpRequest : HttpIncomingMessage {
     private:
-        string _rawUri;
-        Uri _uri;
         string _method;
-        HttpHeader[] _headers;
         HttpContext _context;
-        HttpVersion _protocolVersion;
 
     public:
-        this() {
-        }
 
-        @property {
-            string rawUri() {
-                return _rawUri;
-            }
-            void rawUri(string uri) {
-                _rawUri = uri;
-            }
-        }
-
-        @property {
-            Uri uri() {
-                return _uri;
-            }
-            void uri(Uri uri) {
-                _uri = uri;
-            }
+        this(HttpConnection connection) {
+            super(connection);
         }
 
         @property {
@@ -71,15 +302,6 @@ class HttpRequest {
                 _method = m;
             }
         }
-        @property {
-            HttpHeader[] headers() {
-                return _headers;
-            }
-        }
-
-        void addHeader(HttpHeader header) {
-            _headers ~= header;
-        }
 
         @property {
             HttpContext context() {
@@ -87,12 +309,6 @@ class HttpRequest {
             }
             package void context(HttpContext context) {
                 _context = context;
-            }
-            HttpVersion protocolVersion() {
-                return _protocolVersion;
-            }
-            void protocolVersion(HttpVersion v) {
-                _protocolVersion = v;
             }
         }
 }
@@ -110,12 +326,11 @@ class HttpResponse {
         ubyte[] _bufferedWrites;
 
         void lineWrite(string data = "") {
-            _connection.stream.write(cast(ubyte[])(data ~ "\r\n"));
+            _connection.write(cast(ubyte[])(data ~ "\r\n"));
         }
 
         void _ensureHeadersSent() {
             if(!headersSent) {
-                auto stream = _connection.stream;
                 lineWrite("HTTP/%s %d %s".format(_context.request.protocolVersion.toString, _statusCode, _statusText));
                 foreach(header; _headers) {
                     lineWrite(header.name ~ " : " ~ header.value);
@@ -188,8 +403,8 @@ class HttpResponse {
         void write(ubyte[] data) {
             if(_chunked) {
                 _ensureHeadersSent();
-                _connection.stream.write((cast(ubyte[])format("%x\r\n", data.length)));
-                _connection.stream.write(data ~ cast(ubyte[])"\r\n");
+                _connection.write((cast(ubyte[])format("%x\r\n", data.length)));
+                _connection.write(data ~ cast(ubyte[])"\r\n");
             } else {
                 _bufferedWrites ~= data;
             }
@@ -205,7 +420,7 @@ class HttpResponse {
             if(_chunked) {
                 write(cast(ubyte[])[]);
             } else {
-                _connection.stream.write(_bufferedWrites);
+                _connection.write(_bufferedWrites);
                 debug std.stdio.writeln("Closing");
                 //close();
                 debug std.stdio.writeln("...Closed");
@@ -229,107 +444,49 @@ class HttpResponse {
         }
 }
 
-class HttpConnection {
+class HttpConnection : HttpConnectionBase!HttpRequest {
     alias Action!(void, HttpRequest, HttpResponse) processEventList;
 
-    private:
-        processEventList _processAction;
-        TcpStream _stream;
-        HttpParser _parser;
 
-        HttpRequest _currentRequest;
+    private:
         HttpResponse _currentResponse;
         HttpContext _currentContext;
         void delegate(HttpRequest, HttpResponse) _processCallback;
+        processEventList _processAction;
+    
+    protected:
+         override HttpRequest createIncomingMessage() {
+             return new HttpRequest(this);
+         }
 
-        void onMessageBegin(HttpParser p) {
-            debug std.stdio.writeln("HTTP message began");
-            _currentRequest = new HttpRequest;
+         override void onMessageBegin() {
             _currentResponse = new HttpResponse(this);
-            _currentContext = new HttpContext(_currentRequest, _currentResponse);
-        }
+            _currentContext = new HttpContext(this.currentMessage, _currentResponse);
+         }
 
-        void onUrl(HttpParser p, string uri) {
-            _currentRequest.rawUri = uri;
-            _currentRequest.uri = Uri(_currentRequest.rawUri);
-        }
-
-        void onHeadersComplete(HttpParser p) {
-            _currentRequest.method = p.method;
-            _currentRequest.protocolVersion = p.protocolVersion;
+         override void onBeforeProcess() {
+            _currentMessage.method = this.parser.method;
             _currentResponse._init();
-        }
-
-        void onHeader(HttpParser p, HttpHeader header) {
-            _currentRequest.addHeader(header);
-        }
-
-        void onMessageComplete(HttpParser p) {
-            debug std.stdio.writeln("protocol version set, ", p.protocolVersion.toString);
-            _processCallback(_currentRequest, _currentResponse);
-        }
-
-        void _startProcessing(void delegate(HttpRequest, HttpResponse) callback) {
-            _processCallback = callback;
-            try {
-                debug std.stdio.writeln("Reading to Process HTTP Requests");
-                stream.read ^ (data) {
-                    _parser.execute(data);
-                };
-            } catch(LoopException lex) {
-                if(lex.name == "EOF")  {
-                    debug std.stdio.writeln("Connection closed");
-                } else {
-                    throw lex;
-                }
-            }
-            debug std.stdio.writeln("Stopped processing requests");
-            _stopProcessing();
-        }
-
-        void _stopProcessing() {
-            if(_stream is null) return;
-            debug std.stdio.writeln("_Stopping connection, closing stream");
-            _stream.stopReading();
-            _stream.close();
-            _stream = null;
-            _parser = null;
-            _currentRequest = null;
-            _currentResponse = null;
-            _currentContext = null;
-            debug std.stdio.writeln("_Stopping connection, OK");
-        }
-        ~this() {
-           debug std.stdio.writeln("Collecting HttpConnection");
-        }
-
+         }
+        
+         override void onProcessMessage() {
+            _processCallback(currentMessage, _currentResponse);
+         }
+    
     public:
         this(TcpStream stream) {
             _stream = stream;
-            _parser = new HttpParser(HttpParserType.REQUEST);
-            _parser.onMessageBegin = &onMessageBegin;
-            _parser.onHeader = &onHeader;
-            _parser.onHeadersComplete = &onHeadersComplete;
-            _parser.onMessageComplete = &onMessageComplete;
-            _parser.onUrl = &onUrl;
+            super(stream, HttpParserType.REQUEST);
         }
-
+        
         processEventList process() {
             if(_processAction is null) {
                 _processAction = new processEventList((trigger) {
-                    _startProcessing(trigger);
-                });;
+                    _processCallback = trigger;
+                    startProcessing();
+                });
             }
             return _processAction;
-        }
-
-        @property Stream stream() {
-            return _stream;
-        }
-
-        void stop() {
-           debug std.stdio.writeln("Stopping connection");
-           _stopProcessing;
         }
 }
 
@@ -357,6 +514,10 @@ class HttpListener
             });
         }
 }
+
+/*
+ * HTTP Client
+ */
 
 ushort inferPortForUriSchema(string schema) {
     switch(schema) {
