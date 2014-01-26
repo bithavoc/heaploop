@@ -13,16 +13,16 @@ debug {
  * HTTP Common
  */
 
-abstract class HttpConnectionBase(TIncomingMessage : HttpIncomingMessage) : Looper {
+abstract class HttpConnectionBase : Looper {
     private:
         TcpStream _stream;
         HttpParser _parser;
 
-        TIncomingMessage _currentMessage;
+        HttpIncomingMessage _currentMessage;
 
         void _onMessageBegin(HttpParser p) {
             debug std.stdio.writeln("HTTP message began");
-            _currentMessage = createIncomingMessage();
+            _currentMessage = createMessage();
             onMessageBegin();
         }
 
@@ -73,17 +73,19 @@ package:
         }
 
     protected:
-        @property {
-            TIncomingMessage currentMessage() nothrow pure {
-                return _currentMessage;
-            }
+        final {
+            @property {
+                HttpIncomingMessage currentMessage() nothrow pure {
+                    return _currentMessage;
+                }
 
-            HttpParser parser() nothrow pure {
-                return _parser;
+                HttpParser parser() nothrow pure {
+                    return _parser;
+                }
             }
         }
 
-        abstract TIncomingMessage createIncomingMessage();
+        abstract HttpIncomingMessage createMessage();
 
         abstract void onMessageBegin();
 
@@ -133,6 +135,26 @@ package:
         }
 }
 
+abstract class HttpConnection(TIncomingMessage : HttpIncomingMessage) : HttpConnectionBase {
+    protected:
+        abstract TIncomingMessage createIncomingMessage();
+
+        override HttpIncomingMessage createMessage() {
+            return createIncomingMessage();
+        }
+
+        @property TIncomingMessage currentMessage() {
+            return cast(TIncomingMessage)super.currentMessage;
+        }
+        alias HttpConnectionBase.currentMessage currentMessage;
+    public:
+
+        this(TcpStream stream, HttpParserType parserType) {
+            super(stream, parserType);
+        }
+
+}
+
 abstract class HttpMessage : Looper {
     private:
         Loop _loop;
@@ -178,7 +200,7 @@ abstract class HttpIncomingMessage : HttpMessage
         string _rawUri;
         Uri _uri;
         readOperation _readOperation;
-        HttpConnectionBase!HttpIncomingMessage connection;
+        HttpConnectionBase connection;
     package:
 
         class readOperation : OperationContext!HttpIncomingMessage {
@@ -212,7 +234,7 @@ abstract class HttpIncomingMessage : HttpMessage
 
 
     public:
-        this(HttpConnection connection)
+        this(HttpConnectionBase connection)
             in {
                 assert(connection !is null);
             }
@@ -290,7 +312,7 @@ class HttpRequest : HttpIncomingMessage {
 
     public:
 
-        this(HttpConnection connection) {
+        this(HttpServerConnection connection) {
             super(connection);
         }
 
@@ -315,7 +337,7 @@ class HttpRequest : HttpIncomingMessage {
 
 class HttpResponse {
     private:
-        HttpConnection _connection;
+        HttpServerConnection _connection;
         HttpHeader[] _headers;
         bool _headersSent;
         uint _statusCode;
@@ -355,7 +377,7 @@ class HttpResponse {
         }
 
     public:
-        this(HttpConnection connection) {
+        this(HttpServerConnection connection) {
             _connection = connection;
             this.statusCode = 200;
             this.contentType = "text/plain";
@@ -444,7 +466,7 @@ class HttpResponse {
         }
 }
 
-class HttpConnection : HttpConnectionBase!HttpRequest {
+class HttpServerConnection : HttpConnection!HttpRequest {
     alias Action!(void, HttpRequest, HttpResponse) processEventList;
 
 
@@ -465,7 +487,7 @@ class HttpConnection : HttpConnectionBase!HttpRequest {
          }
 
          override void onBeforeProcess() {
-            _currentMessage.method = this.parser.method;
+            currentMessage.method = this.parser.method;
             _currentResponse._init();
          }
         
@@ -505,10 +527,10 @@ class HttpListener
             return cast(TThis)this;
         }
 
-        Action!(void, HttpConnection) listen(int backlog = 50000) {
-            return new Action!(void, HttpConnection)((trigger) {
+        Action!(void, HttpServerConnection) listen(int backlog = 50000) {
+            return new Action!(void, HttpServerConnection)((trigger) {
                 _server.listen(backlog) ^ (client) {
-                    auto connection = new HttpConnection(client);
+                    auto connection = new HttpServerConnection(client);
                     trigger(connection);
                 };
             });
@@ -579,121 +601,57 @@ class HttpRequestMessage
         }
 }
 
-class HttpResponseMessage : Looper
+class HttpResponseMessage : HttpIncomingMessage
 {
+    public:
+        this(HttpClientConnection connection)
+        {
+            super(connection);
+        }
+}
+
+class HttpClientConnection : HttpConnection!HttpResponseMessage {
+    alias Action!(void, HttpResponseMessage) processEventList;
+
+
     private:
-        TcpStream _stream;
-        HttpParser _parser;
-        HttpHeader[] _headers;
+        HttpResponse _currentResponse;
+        HttpContext _currentContext;
+        void delegate(HttpResponseMessage) _responseCallback;
+        processEventList _responseAction;
+    
+    protected:
+         override HttpResponseMessage createIncomingMessage() {
+             return new HttpResponseMessage(this);
+         }
 
-        class readOperation : OperationContext!HttpResponseMessage {
-            public:
-               ubyte[] bufferedData;
-               bool stopped;
-               this(HttpResponseMessage target) {
-                   super(target);
-               }
-               @property bool hasBufferedData() {
-                   return bufferedData.length > 0;
-               }
-               ubyte[] consumeBufferedData() {
-                   scope (exit) {
-                       bufferedData = null;
-                   }
-                   return bufferedData;
-               }
-        }
-        readOperation _readOperation;
+         override void onMessageBegin() {}
 
-        readOperation _ensureReadOperation() {
-            if(_readOperation is null) {
-                return _readOperation = new readOperation(this);
-            }
-            return _readOperation;
-        }
-
-        void onHeader(HttpParser parser, HttpHeader header) {
-            _headers ~= header;
-        }
-
-        void onHeadersComplete(HttpParser parser) {
-            debug writeln("Client headers complete, stop reading");
-           _stream.stopReading();
+         override void onBeforeProcess() {}
+        
+         override void onProcessMessage() {
+            _responseCallback(currentMessage);
+         }
+    
+    public:
+        this(TcpStream stream) {
+            super(stream, HttpParserType.RESPONSE);
         }
         
-        void onMessageComplete(HttpParser parser) {
-            
-        }
-
-        void onBody(HttpParser parser, HttpBodyChunk chunk) {
-            debug writeln("HTTP Response Message: read some data: ", chunk.buffer);
-            auto cx = _ensureReadOperation();
-            cx.bufferedData ~= chunk.buffer;
-            cx.stopped = chunk.isFinal;
-            cx.resume;
-        }
-
-        void readHeaders() {
-            debug writeln("HTTP Response Message: before readHeaders");
-           _stream.read ^ (data) {
-               _parser.execute(data);
-           }; 
-            debug writeln("HTTP Response Message: after readHeaders");
-        }
-
-    public:
-        this(TcpStream stream)
-            in {
-                assert(stream !is null);
-            }
-            body {
-                _parser = new HttpParser(HttpParserType.RESPONSE);
-                _parser.onHeader = &onHeader;
-                _parser.onHeadersComplete = &onHeadersComplete;
-                _parser.onMessageComplete = &onMessageComplete;
-                _parser.onBody = &onBody;
-                //_parser.onUrl = &onUrl;
-                _stream = stream;
-                readHeaders();
-            }
-
-            Action!(void, ubyte[]) read() {
-                return new Action!(void, ubyte[])((a) {
-                   auto cx = _ensureReadOperation();
-                   if(cx.hasBufferedData) {
-                        debug writeln("HTTP Response Message: delivering buffered data");
-                        a(cx.consumeBufferedData());
-                   }
-                   if(!cx.stopped) {
-                       debug writeln("HTTP Response Message: processing more of the body");
-                       _stream.read ^ (data) {
-                            _parser.execute(data);
-                       }; 
-                       debug writeln("HTTP Response Message: continue after response read");
-                       _readOperation = null;
-                   } else {
-                       debug writeln("HTTP Response Message: body was entirely buffered");
-                   }
+        processEventList response() {
+            if(_responseAction is null) {
+                _responseAction = new processEventList((trigger) {
+                    _responseCallback = trigger;
+                    startProcessing();
                 });
             }
-            @property Loop loop() {
-                return _stream.loop;
-            }
-            @property HttpHeader[] headers() {
-                return _headers;
-            }
+            return _responseAction;
+        }
 }
 
 class HttpClient 
 {
-    private:
-        TcpStream _stream;
-
     public:
-
-        this() {
-            _stream = new TcpStream;
-        }
 
         HttpResponseMessage get(string uri) {
             return get(Uri(uri));
@@ -704,14 +662,22 @@ class HttpClient
             if(port == 0) {
                 port = inferPortForUriSchema(uri.schema);
             }
-            _stream.connect4(uri.host, port);
+            TcpStream stream = new TcpStream;
+            stream.connect4(uri.host, port);
             auto request = new HttpRequestMessage;
             request.method = "GET";
             request.uri = uri;
             request.protocolVersion = HttpVersion(1,0);
             debug writeln("about to send headers");
-            request.send(_stream);
-            return new HttpResponseMessage(_stream);
+            request.send(stream);
+            auto connection = new HttpClientConnection(stream);
+            HttpResponseMessage response;
+            connection.response ^ (r) {
+                debug writeln("about to send headers");
+                response = r;
+                connection.stop;
+            };
+            return response;
         }
 }
 

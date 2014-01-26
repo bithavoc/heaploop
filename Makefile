@@ -18,7 +18,7 @@ examples: heaploop
 	cd examples; $(DC) -of../out/loop_example loop_example.d $(lib_build_params) $(DFLAGS)
 	cd examples; $(DC) -of../out/http_example http_example.d $(lib_build_params) $(DFLAGS)
 	cd examples; $(DC) -of../out/tcp_client tcp_client.d $(lib_build_params) $(DFLAGS)
-	#cd examples; $(DC) -of../out/http_client http_client.d $(lib_build_params) $(DFLAGS)
+	cd examples; $(DC) -of../out/http_client http_client.d $(lib_build_params) $(DFLAGS)
 	cd examples; $(DC) -of../out/http_body http_body.d $(lib_build_params) $(DFLAGS)
 	cd examples; $(DC) -of../out/http_serv http_serv.d $(lib_build_params) $(DFLAGS)
 

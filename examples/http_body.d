@@ -7,7 +7,7 @@ import std.string : format;
 void main() {
     loop ^^ {
         HttpListener server = new HttpListener;
-        server.bind4("0.0.0.0", 4000);
+        server.bind4("0.0.0.0", 3000);
         server.listen ^^ (connection) {
             writeln("New HTTP connection");
             connection.process ^^ (request, response) {
