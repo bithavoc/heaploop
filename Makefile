@@ -10,7 +10,7 @@ endif
 ifeq (${OS_NAME},Darwin)
 	DFLAGS+=-L-framework -LCoreServices 
 endif
-lib_build_params=../out/heaploop.o ../out/duv.a ../out/uv.a ../out/events.d.a ../out/http-parser.a -I../out/di
+lib_build_params=../out/heaploop.a -I../out/di
 
 build: heaploop
 
@@ -24,8 +24,12 @@ examples: heaploop
 
 heaploop: lib/**/*.d deps/duv deps/events.d deps/http-parser.d
 	mkdir -p out
-	cd lib; $(DC) -Hd../out/di/ -of$(lib_build_params) -op -c heaploop/*.d heaploop/networking/*.d $(lib_build_params) $(DFLAGS)
-	ar -r out/heaploop.a out/heaploop.o
+	cd lib; $(DC) -Hd../out/di/ -of../out/heaploop.o -op -c heaploop/*.d heaploop/networking/*.d $(lib_build_params) $(DFLAGS)
+	
+	(mkdir -p out/duv ; cd out/duv ; ar -x ../duv.a)
+	(mkdir -p out/events ; cd out/events ; ar -x ../events.d.a)
+	(mkdir -p out/http-parser ; cd out/http-parser ; ar -x ../http-parser.a)
+	ar -r out/heaploop.a out/heaploop.o out/duv/*.o out/events/*.o out/http-parser/*.o
 
 .PHONY: clean
 
