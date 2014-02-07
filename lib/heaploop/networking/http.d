@@ -517,6 +517,11 @@ class HttpListener
     private:
         TcpStream _server;
 
+    protected:
+        HttpServerConnection createConnection(TcpStream stream) {
+            return new HttpServerConnection(stream);
+        }
+
     public:
         this() {
             _server = new TcpStream;
@@ -530,11 +535,12 @@ class HttpListener
         Action!(void, HttpServerConnection) listen(int backlog = 50000) {
             return new Action!(void, HttpServerConnection)((trigger) {
                 _server.listen(backlog) ^ (client) {
-                    auto connection = new HttpServerConnection(client);
+                    auto connection = this.createConnection(client);
                     trigger(connection);
                 };
             });
         }
+
 }
 
 /*
