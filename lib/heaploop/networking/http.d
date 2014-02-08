@@ -423,6 +423,9 @@ class HttpResponse {
                     case 200:
                         _statusText = "OK";
                         break;
+                    case 201:
+                        _statusText = "CREATED";
+                        break;
                     default:
                         throw new Exception(std.string.format("Unknown HTTP status code %s... pull request time?", _statusCode));
                 }
