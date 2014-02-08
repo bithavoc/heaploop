@@ -160,6 +160,7 @@ abstract class HttpMessage : Looper {
         Loop _loop;
         HttpHeader[] _headers;
         HttpVersion _version;
+        string _contentType;
 
     package:
         this(Loop loop) 
@@ -179,10 +180,17 @@ abstract class HttpMessage : Looper {
             HttpHeader[] headers() nothrow pure {
                 return _headers;
             }
+
+            string contentType() {
+                return _contentType;
+            }
         }
 
         void addHeader(HttpHeader header) {
             _headers ~= header;
+            if(header.name == "Content-Type") {
+                _contentType = header.value;
+            }
         }
 
         void protocolVersion(in HttpVersion v) {
