@@ -33,6 +33,7 @@ abstract class HttpConnectionBase : Looper {
 
         void onHeadersComplete(HttpParser p) {
             _currentMessage.protocolVersion = p.protocolVersion;
+            _currentMessage.transmissionMode = p.transmissionMode;
             debug std.stdio.writeln("protocol version set, ", p.protocolVersion.toString);
             onBeforeProcess();
             onProcessMessage();
@@ -209,6 +210,7 @@ abstract class HttpIncomingMessage : HttpMessage
         Uri _uri;
         readOperation _readOperation;
         HttpConnectionBase connection;
+        HttpBodyTransmissionMode _transmissionMode;
     package:
 
         class readOperation : OperationContext!HttpIncomingMessage {
@@ -239,6 +241,11 @@ abstract class HttpIncomingMessage : HttpMessage
             }
             return _readOperation;
         }
+        @property {
+            void transmissionMode(HttpBodyTransmissionMode mode) {
+                _transmissionMode = mode;
+            }
+        }
 
 
     public:
@@ -252,18 +259,20 @@ abstract class HttpIncomingMessage : HttpMessage
 
             Action!(void, HttpBodyChunk) read() {
                 return new Action!(void, HttpBodyChunk)((a) {
-                   auto cx = _ensureReadOperation();
-                   do {
-                       if(cx.hasBufferedChunk) {
-                            debug writeln("HTTP Response Message: delivering buffered data");
-                            a(cx.consumeBufferedChunk());
-                       }
-                       if(cx.stopped) {
-                            break;
-                       }
-                       cx.yield;
-                       cx.completed;
-                   } while(cx.hasBufferedChunk);
+                   if(this.shouldRead) {
+                       auto cx = _ensureReadOperation();
+                       do {
+                           if(cx.hasBufferedChunk) {
+                                debug writeln("HTTP Response Message: delivering buffered data");
+                                a(cx.consumeBufferedChunk());
+                           }
+                           if(cx.stopped) {
+                                break;
+                           }
+                           cx.yield;
+                           cx.completed;
+                       } while(cx.hasBufferedChunk);
+                   }
                 });
             }
         @property {
@@ -283,6 +292,15 @@ abstract class HttpIncomingMessage : HttpMessage
             void uri(Uri uri) {
                 _uri = uri;
             }
+
+            bool shouldRead() nothrow pure {
+                return this.transmissionMode.shouldRead;
+            }
+
+            HttpBodyTransmissionMode transmissionMode() nothrow pure {
+                return _transmissionMode;
+            }
+
         }
 }
 
