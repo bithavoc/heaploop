@@ -4,8 +4,8 @@ import heaploop.looping;
 import heaploop.streams;
 import events;
 import std.string : format, translate;
-import std.array : split;
-import std.uri : decodeComponent;
+import std.array : split, appender, replace;
+import std.uri : decodeComponent, encodeComponent;
 import http.parser.core;
 
 debug {
@@ -589,6 +589,10 @@ string decodeFormComponent(string component) {
     return component.translate(FormDecodingTranslation);
 }
 
+string encodeFormComponent(string component) {
+    return component.replace("%20", "+");
+}
+
 public:
 
 FormFields parseURLEncodedForm(string content) {
@@ -602,6 +606,20 @@ FormFields parseURLEncodedForm(string content) {
         fields[name] = value.decodeComponent.decodeFormComponent;
     }
     return fields;
+}
+
+string encodeURLForm(FormFields fields) {
+    if(fields.length < 1) return null;
+    auto text = appender!string;
+    foreach(i, name;fields.keys) {
+        if(i != 0) {
+            text.put("&");
+        }
+        text.put(name.encodeComponent.encodeFormComponent);
+        text.put("=");
+        text.put(fields[name].encodeComponent.encodeFormComponent);
+    }
+    return text.data;
 }
 
 /*
