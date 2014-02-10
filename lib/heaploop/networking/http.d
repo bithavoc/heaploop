@@ -739,7 +739,7 @@ abstract class HttpContent {
         abstract void writeTo(void delegate(ubyte[] data) writer);
 }
 
-abstract class UbyteContent: HttpContent {
+class UbyteContent: HttpContent {
     private:
         ubyte[] _buffer;
 
@@ -781,7 +781,7 @@ class HttpClient
             }
         }
 
-        HttpResponseMessage post(string path, HttpContent content = null) {
+        HttpResponseMessage send(string method, string path, HttpContent content = null) {
             Uri uri = Uri(_rootUri.toString ~ path);
             ushort port = uri.port;
             if(port == 0) {
@@ -790,7 +790,7 @@ class HttpClient
             TcpStream stream = new TcpStream;
             stream.connect4(uri.host, port);
             auto request = new HttpRequestMessage;
-            request.method = "GET";
+            request.method = method;
             request.uri = uri;
             request.protocolVersion = HttpVersion(1,0);
             request.send(stream);
@@ -804,6 +804,14 @@ class HttpClient
                 connection.stop;
             };
             return response;
+        }
+
+        HttpResponseMessage post(string path, HttpContent content = null) {
+            return send("POST", path, content);
+        }
+
+        HttpResponseMessage put(string path, HttpContent content = null) {
+            return send("PUT", path, content);
         }
 
         HttpResponseMessage get(string path) {
