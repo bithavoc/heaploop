@@ -28,8 +28,8 @@ void main() {
             };
         }).call;
         writeln("HTTP Client Example: Sending Request");
-        HttpClient client = new HttpClient;
-        auto response = client.get("http://0.0.0.0:4000/hello");
+        HttpClient client = new HttpClient("http://0.0.0.0:4000");
+        auto response = client.get("/hello");
         writeln("HTTP Client Example: Response received, reading body");
         foreach(h; response.headers) {
             writeln("=> %s : %s".format(h.name, h.value)); 

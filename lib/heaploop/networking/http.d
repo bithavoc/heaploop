@@ -684,15 +684,48 @@ class HttpClientConnection : HttpConnection!HttpResponseMessage {
         }
 }
 
-class HttpClient 
-{
+abstract class HttpContent {
     public:
+        abstract void writeTo(void delegate(ubyte[] data) writer);
+}
 
-        HttpResponseMessage get(string uri) {
-            return get(Uri(uri));
+abstract class UbyteContent: HttpContent {
+    private:
+        ubyte[] _buffer;
+
+    public:
+        this(ubyte[] buffer) {
+            _buffer = buffer;
         }
 
-        HttpResponseMessage get(Uri uri) {
+        override void writeTo(void delegate(ubyte[] data) writer) {
+            if(_buffer !is null) {
+                writer(_buffer);
+            }
+        }
+}
+
+class HttpClient 
+{
+    private:
+        Uri _rootUri;
+    public:
+        this(string rootUri) {
+            this(Uri(rootUri));
+        }
+
+        this(Uri rootUri) {
+            _rootUri = rootUri;
+        }
+
+        @property {
+            Uri rootUri() nothrow pure {
+                return _rootUri;
+            }
+        }
+
+        HttpResponseMessage post(string path, HttpContent content = null) {
+            Uri uri = Uri(_rootUri.toString ~ path);
             ushort port = uri.port;
             if(port == 0) {
                 port = inferPortForUriSchema(uri.schema);
@@ -703,12 +736,35 @@ class HttpClient
             request.method = "GET";
             request.uri = uri;
             request.protocolVersion = HttpVersion(1,0);
-            debug writeln("about to send headers");
+            request.send(stream);
+            auto connection = new HttpClientConnection(stream);
+            if(content !is null) {
+                content.writeTo(&connection.write);
+            }
+            HttpResponseMessage response;
+            connection.response ^ (r) {
+                response = r;
+                connection.stop;
+            };
+            return response;
+        }
+
+        HttpResponseMessage get(string path) {
+            Uri uri = Uri(_rootUri.toString ~ path);
+            ushort port = uri.port;
+            if(port == 0) {
+                port = inferPortForUriSchema(uri.schema);
+            }
+            TcpStream stream = new TcpStream;
+            stream.connect4(uri.host, port);
+            auto request = new HttpRequestMessage;
+            request.method = "GET";
+            request.uri = uri;
+            request.protocolVersion = HttpVersion(1,0);
             request.send(stream);
             auto connection = new HttpClientConnection(stream);
             HttpResponseMessage response;
             connection.response ^ (r) {
-                debug writeln("about to send headers");
                 response = r;
                 connection.stop;
             };
