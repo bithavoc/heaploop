@@ -3,8 +3,11 @@ import heaploop.networking.tcp;
 import heaploop.looping;
 import heaploop.streams;
 import events;
-import std.string : format;
+import std.string : format, translate;
+import std.array : split;
+import std.uri : decodeComponent;
 import http.parser.core;
+
 debug {
     import std.stdio : writeln;
 }
@@ -570,6 +573,35 @@ class HttpListener
             });
         }
 
+}
+
+alias string[string] FormFields;
+
+private:
+
+static dchar[dchar] FormDecodingTranslation;
+
+static this() {
+    FormDecodingTranslation = ['+' : ' '];
+}
+
+string decodeFormComponent(string component) {
+    return component.translate(FormDecodingTranslation);
+}
+
+public:
+
+FormFields parseURLEncodedForm(string content) {
+    if(content.length < 1) return null;
+    FormFields fields;
+    string[] pairs = content.split("&");
+    foreach(entry; pairs) {
+        string[] values = entry.split("=");
+        string name = values[0].decodeComponent.decodeFormComponent;
+        string value = values[1];
+        fields[name] = value.decodeComponent.decodeFormComponent;
+    }
+    return fields;
 }
 
 /*

@@ -22,16 +22,22 @@ examples: heaploop
 	cd examples; $(DC) -of../out/http_body http_body.d $(lib_build_params) $(DFLAGS)
 	cd examples; $(DC) -of../out/http_serv http_serv.d $(lib_build_params) $(DFLAGS)
 
-heaploop: lib/**/*.d deps/duv deps/events.d deps/http-parser.d
+heaploop: lib/**/*.d deps
 	mkdir -p out
 	cd lib; $(DC) -Hd../out/di/ -of../out/heaploop.o -op -c heaploop/*.d heaploop/networking/*.d $(lib_build_params) $(DFLAGS)
-	
+	ar -r out/heaploop.a out/heaploop.o out/duv/*.o out/events/*.o out/http-parser/*.o
+
+test: heaploop test/*.d
+	mkdir -p out
+	cd lib; $(DC) -Hd../out/di/ -of../out/heaploop_runner -op -unittest -main heaploop/*.d heaploop/networking/*.d ../test/*.d -I../out/di $(DFLAGS) ../out/duv/*.o ../out/events/*.o ../out/http-parser/*.o
+	out/./heaploop_runner
+
+.PHONY: clean
+
+deps: deps/events.d deps/duv deps/http-parser.d
 	(mkdir -p out/duv ; cd out/duv ; ar -x ../duv.a)
 	(mkdir -p out/events ; cd out/events ; ar -x ../events.d.a)
 	(mkdir -p out/http-parser ; cd out/http-parser ; ar -x ../http-parser.a)
-	ar -r out/heaploop.a out/heaploop.o out/duv/*.o out/events/*.o out/http-parser/*.o
-
-.PHONY: clean
 
 deps/events.d:
 	@echo "Compiling deps/events.d"
