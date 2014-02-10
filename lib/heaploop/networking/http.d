@@ -755,6 +755,13 @@ abstract class UbyteContent: HttpContent {
         }
 }
 
+class FormUrlEncodedContent : UbyteContent {
+    public:
+        this(string[string] fields) {
+            super(cast(ubyte[])encodeURLForm(fields));
+        }
+}
+
 class HttpClient 
 {
     private:
