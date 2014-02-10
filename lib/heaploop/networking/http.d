@@ -639,6 +639,7 @@ class HttpRequestMessage
         string _method;
         HttpVersion _version;
         Uri _uri;
+        HttpContent _content;
 
     public:
         @property {
@@ -667,6 +668,13 @@ class HttpRequestMessage
                 _uri = uri;
             }
 
+            HttpContent content() {
+                return _content;
+            }
+            void content(HttpContent content) {
+                _content = content;
+            }
+
         }
 
         void send(TcpStream stream) {
@@ -681,7 +689,18 @@ class HttpRequestMessage
             };
             writeHeader("%s %s HTTP/%s".format(_method, path, _version.toString));
             writeHeader("Host: %s".format(_uri.host));
+
+            ubyte[] entity;
+            if(this.content !is null) {
+                this.content.writeTo(delegate void(ubyte[] d) {
+                    entity ~= d;
+                });
+                writeHeader("Content-Length: %d".format(entity.length));
+            }
             writeHeader("");
+            if(entity.length > 0) {
+                stream.write(entity);
+            }
             debug writeln("headers send");
         }
 }
@@ -793,11 +812,9 @@ class HttpClient
             request.method = method;
             request.uri = uri;
             request.protocolVersion = HttpVersion(1,0);
+            request.content = content;
             request.send(stream);
             auto connection = new HttpClientConnection(stream);
-            if(content !is null) {
-                content.writeTo(&connection.write);
-            }
             HttpResponseMessage response;
             connection.response ^ (r) {
                 response = r;

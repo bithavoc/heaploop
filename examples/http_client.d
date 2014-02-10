@@ -29,7 +29,7 @@ void main() {
         }).call;
         writeln("HTTP Client Example: Sending Request");
         HttpClient client = new HttpClient("http://0.0.0.0:4000");
-        auto response = client.get("/hello");
+        auto response = client.post("/hello", new UbyteContent(cast(ubyte[])"helloworld"));
         writeln("HTTP Client Example: Response received, reading body");
         foreach(h; response.headers) {
             writeln("=> %s : %s".format(h.name, h.value)); 
