@@ -5,7 +5,7 @@ import heaploop.networking.http;
 
 import std.stdio;
 void main() {
-    loop ^^ {
+    loop ^^= {
         new Check().start((c){
            // Garbage Collect on every loop
            //core.memory.GC.collect;
@@ -14,10 +14,10 @@ void main() {
         server.bind4("0.0.0.0", 3000);
         "bound".writeln;
         "listening http://localhost:3000".writeln;
-        server.listen ^^ (connection) {
+        server.listen ^^= (connection) {
             debug writeln("HTTP Agent just connected");
             try {
-                connection.process ^^ (request, response) {
+                connection.process ^^= (request, response) {
                     try {
                         debug writeln("Processing ", request.method, " ",  request.uri.path, " as protocol version ", request.protocolVersion.toString);
                         foreach(h;request.headers) {

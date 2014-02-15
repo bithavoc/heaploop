@@ -5,12 +5,12 @@ import std.stdio;
 import std.string : format;
 
 void main() {
-    loop ^^ {
+    loop ^^= {
         HttpListener server = new HttpListener;
         server.bind4("0.0.0.0", 3000);
-        server.listen ^^ (connection) {
+        server.listen ^^= (connection) {
             writeln("New HTTP connection");
-            connection.process ^^ (request, response) {
+            connection.process ^^= (request, response) {
                 if(request.method == "POST") {
                     writeln("Serveing POST");
                     request.read ^ (chunk) {

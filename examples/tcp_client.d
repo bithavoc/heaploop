@@ -4,10 +4,10 @@ import std.stdio;
 
 void main() {
     writeln("Connecting to 0.0.0.0:3000");
-    loop ^^ {
+    loop ^^= {
         TcpStream stream = new TcpStream;
         stream.connect4("0.0.0.0", 3000);
-        stream.read ^ (data) {
+        stream.read ^= (data) {
             writeln("Bytes Read from Server: ", data.length);
         };
     };

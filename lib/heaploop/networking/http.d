@@ -100,7 +100,7 @@ package:
         void startProcessing() {
             try {
                 debug std.stdio.writeln("Reading to Process HTTP Requests");
-                _stream.read ^ (data) {
+                _stream.read ^= (data) {
                     _parser.execute(data);
                 };
             } catch(LoopException lex) {
@@ -569,7 +569,7 @@ class HttpListener
 
         Action!(void, HttpServerConnection) listen(int backlog = 50000) {
             return new Action!(void, HttpServerConnection)((trigger) {
-                _server.listen(backlog) ^ (client) {
+                _server.listen(backlog) ^= (client) {
                     auto connection = this.createConnection(client);
                     trigger(connection);
                 };
@@ -718,14 +718,14 @@ class HttpResponseMessage : HttpIncomingMessage
 }
 
 class HttpClientConnection : HttpConnection!HttpResponseMessage {
-    alias Action!(void, HttpResponseMessage) processEventList;
+    alias Action!(void, HttpResponseMessage) responseAction;
 
 
     private:
         HttpResponse _currentResponse;
         HttpContext _currentContext;
         void delegate(HttpResponseMessage) _responseCallback;
-        processEventList _responseAction;
+        responseAction _responseAction;
     
     protected:
          override HttpResponseMessage createIncomingMessage() {
@@ -745,9 +745,9 @@ class HttpClientConnection : HttpConnection!HttpResponseMessage {
             super(stream, HttpParserType.RESPONSE);
         }
         
-        processEventList response() {
+        responseAction response() {
             if(_responseAction is null) {
-                _responseAction = new processEventList((trigger) {
+                _responseAction = new responseAction((trigger) {
                     _responseCallback = trigger;
                     startProcessing();
                 });
@@ -819,7 +819,7 @@ class HttpClient
             request.send(stream);
             auto connection = new HttpClientConnection(stream);
             HttpResponseMessage response;
-            connection.response ^ (r) {
+            connection.response ^= (r) {
                 response = r;
                 connection.stop;
             };
@@ -849,7 +849,7 @@ class HttpClient
             request.send(stream);
             auto connection = new HttpClientConnection(stream);
             HttpResponseMessage response;
-            connection.response ^ (r) {
+            connection.response ^= (r) {
                 response = r;
                 connection.stop;
             };

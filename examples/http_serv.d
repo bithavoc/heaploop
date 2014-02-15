@@ -75,15 +75,15 @@ class HelloApp : RackApp {
 }
 
 void main() {
-    loop ^^ {
+    loop ^^= {
         auto server = new HttpListener;
         server.bind4("0.0.0.0", 3000);
         writeln("listening on http://localhost:3000");
-        server.listen ^^ (connection) {
+        server.listen ^^= (connection) {
             try {
                 auto app = new HelloApp;
                 auto adapter = new RackAdapter(app);
-                connection.process ^^ (&adapter.handleRequest);
+                connection.process ^^= (&adapter.handleRequest);
             } catch(Exception ex) {
                 writeln("something went wrong processing http in this connection");
             }

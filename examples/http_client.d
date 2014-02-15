@@ -5,16 +5,16 @@ import std.stdio;
 import std.string : format;
 
 void main() {
-    loop ^^ {
+    loop ^^= {
         new Fiber({
             HttpListener server = new HttpListener;
             server.bind4("0.0.0.0", 4000);
-            server.listen ^^ (connection) {
+            server.listen ^^= (connection) {
                 writeln("New HTTP connection");
-                connection.process ^^ (request, response) {
+                connection.process ^^= (request, response) {
                     if(request.method == "POST") {
                         writeln("Serveing POST");
-                        request.read ^ (chunk) {
+                        request.read ^= (chunk) {
                             writeln("POST Chunk ", cast(string)chunk.buffer);
                         };
                     }
@@ -34,7 +34,7 @@ void main() {
         foreach(h; response.headers) {
             writeln("=> %s : %s".format(h.name, h.value)); 
         }
-        response.read ^ (chunk) {
+        response.read ^= (chunk) {
            writeln("HTTP Response Body: ", cast(string)chunk.buffer); 
         };
         writeln("Finished reading");
