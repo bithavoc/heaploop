@@ -429,6 +429,9 @@ class HttpResponse {
                     case 201:
                         _statusText = "CREATED";
                         break;
+                    case 422:
+                        _statusText = "UNPROCESSABLE ENTITY";
+                        break;
                     default:
                         throw new Exception(std.string.format("Unknown HTTP status code %s... pull request time?", _statusCode));
                 }
