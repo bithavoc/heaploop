@@ -41,7 +41,7 @@ dependencies: deps/events.d deps/duv deps/http-parser.d
 
 deps/events.d:
 	@echo "Compiling deps/events.d"
-	git submodule update --init --recursive --remote deps/events.d
+	git submodule update --init --recursive deps/events.d
 	mkdir -p out/di
 	DEBUG=${DEBUG} $(MAKE) -C deps/events.d
 	cp deps/events.d/out/events.d.a out/
@@ -49,7 +49,7 @@ deps/events.d:
 
 deps/duv:
 	@echo "Compiling deps/duv.d"
-	git submodule update --init  --remote deps/duv
+	git submodule update --init deps/duv
 	mkdir -p out/di
 	(cd deps/duv; DEBUG=${DEBUG} $(MAKE) clean )
 	(cd deps/duv; DEBUG=${DEBUG} $(MAKE) )
@@ -59,7 +59,7 @@ deps/duv:
 
 deps/http-parser.d:
 	@echo "Compiling deps/http-parser.d"
-	git submodule update --init --remote deps/http-parser.d
+	git submodule update --init deps/http-parser.d
 	mkdir -p out/di
 	(cd deps/http-parser.d; DEBUG=${DEBUG} $(MAKE) clean )
 	(cd deps/http-parser.d; DEBUG=${DEBUG} $(MAKE) )
