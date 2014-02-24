@@ -1,0 +1,14 @@
+{
+	"name": "heaploop",
+	"description": "Platform for D",
+    "targetType": "library",
+	"copyright": "Copyright © 2012-2014, heapsource.com",
+	"authors": ["heapsource"],
+    "importPaths": ["lib"],
+    "sourcePaths": ["lib"],
+	"dependencies": {
+        "uv": "~master",
+        "http-parser": "~master",
+        "events": "~master"
+	}
+}
