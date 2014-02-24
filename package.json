@@ -2,6 +2,7 @@
 	"name": "heaploop",
 	"description": "Platform for D",
     "targetType": "library",
+    "license": "MIT",
 	"copyright": "Copyright © 2012-2014, heapsource.com",
 	"authors": ["heapsource"],
     "importPaths": ["lib"],
