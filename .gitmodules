@@ -1,9 +1,0 @@
-[submodule "deps/duv"]
-	path = deps/duv
-	url = https://github.com/heapsource/duv.git
-[submodule "deps/events.d"]
-	path = deps/events.d
-	url = https://github.com/heapsource/events.d.git
-[submodule "deps/http-parser.d"]
-	path = deps/http-parser.d
-	url = https://github.com/heapsource/http-parser.d.git
