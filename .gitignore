@@ -8,3 +8,4 @@
 /examples/http_serv/http_serv
 /examples/loop_example/loop_example
 /examples/tcp_client/tcp_client
+/examples/dns_resolver/dns_resolver
