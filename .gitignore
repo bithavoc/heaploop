@@ -1,4 +1,10 @@
 /out
 /deps/duv/
 /deps/events.d/
-/.dub
+.dub
+/examples/http_body/http_body
+/examples/http_client/http_client
+/examples/http_example/http_example
+/examples/http_serv/http_serv
+/examples/loop_example/loop_example
+/examples/tcp_client/tcp_client

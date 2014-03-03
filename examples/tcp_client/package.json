@@ -1,0 +1,12 @@
+{
+	"name": "tcp_client",
+	"description": "A minimal D application.",
+	"copyright": "Copyright © 2014, thepumpkin",
+	"authors": ["thepumpkin"],
+	"dependencies": {
+        "heaploop": {
+            "path": "../../",
+            "version": "~master"
+        }
+	}
+}

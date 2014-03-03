@@ -13,7 +13,7 @@ void main() {
             connection.process ^^= (request, response) {
                 if(request.method == "POST") {
                     writeln("Serveing POST");
-                    request.read ^ (chunk) {
+                    request.read ^= (chunk) {
                         writeln("POST Chunk ", cast(string)chunk.buffer);
                     };
                     writeln("request.read completed");
