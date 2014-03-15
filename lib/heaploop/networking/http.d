@@ -1,5 +1,6 @@
 module heaploop.networking.http;
 import heaploop.networking.tcp;
+import heaploop.networking.dns;
 import heaploop.looping;
 import heaploop.streams;
 import events;
@@ -810,7 +811,7 @@ class HttpClient
                 port = inferPortForUriSchema(uri.schema);
             }
             TcpStream stream = new TcpStream;
-            stream.connect4(uri.host, port);
+            stream.connect(uri.host, port);
             auto request = new HttpRequestMessage;
             request.method = method;
             request.uri = uri;
@@ -841,7 +842,7 @@ class HttpClient
                 port = inferPortForUriSchema(uri.schema);
             }
             TcpStream stream = new TcpStream;
-            stream.connect4(uri.host, port);
+            stream.connect(uri.host, port);
             auto request = new HttpRequestMessage;
             request.method = "GET";
             request.uri = uri;

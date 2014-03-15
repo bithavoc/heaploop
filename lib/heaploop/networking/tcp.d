@@ -1,6 +1,7 @@
 module heaploop.networking.tcp;
 import heaploop.streams;
 import heaploop.looping;
+import heaploop.networking.dns;
 import duv.c;
 import duv.types;
 import events;
@@ -88,6 +89,30 @@ class TcpStream : Stream
             return _connecting;
         }
 
+        void connect(string hostname, int port) {
+            auto addresses = Dns.resolveHost(hostname);
+            NetworkAddress address = null;
+            foreach(addr; addresses) {
+                if(addr.family == AddressFamily.INETv4) {
+                    address = addr;
+                    break;
+                }
+            }
+            if(address is null) {
+               throw new Exception("Unable to resolve " ~ hostname);
+            }
+            this.connect(address, port);
+        }
+
+        void connect(NetworkAddress address, int port) {
+            if(address.family == AddressFamily.INETv4) {
+                std.stdio.writeln("Connecting to " ~ address.IP);
+                this.connect4(address.IP, port);
+            } else {
+                assert(0, "unable to connect to addresses other than ipv4");
+            }
+        }
+
         void connect4(string address, int port) {
             if(_connecting) {
                 throw new Exception("Stream already connecting");
@@ -106,5 +131,6 @@ class TcpStream : Stream
             cx.yield;
             cx.completed;
         }
+
 }
 

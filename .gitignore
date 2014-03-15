@@ -9,3 +9,4 @@
 /examples/loop_example/loop_example
 /examples/tcp_client/tcp_client
 /examples/dns_resolver/dns_resolver
+/examples/http_get/http_get_client
