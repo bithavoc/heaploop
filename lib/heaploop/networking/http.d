@@ -17,6 +17,45 @@ debug {
  * HTTP Common
  */
 
+class NetworkCredential {
+    import std.base64;
+
+    private string _userName, _password;
+    public:
+        this(string userName = null, string password = null) {
+            _userName = userName;
+            _password = password;
+        }
+        this(Uri uri) {
+           if(uri.userInfo) {
+               auto pieces = uri.userInfo.split(":");
+               auto len = pieces.length;
+               if(pieces.length > 0) {
+                   this(pieces[0], pieces[1]);
+                   return;
+               }
+           } 
+           this();
+        }
+        @property {
+            string userName() {
+                return _userName;
+            }
+            void userName(string userName) {
+                _userName = userName;
+            }
+            string password() {
+                return _password;
+            }
+            void password(string password) {
+                _password = password;
+            }
+            string authorizationHeader() {
+                return "Basic " ~ cast(string)Base64.encode(cast(ubyte[])(_userName ~ ":" ~ _password));
+            }
+        }
+}
+
 abstract class HttpConnectionBase : Looper {
     private:
         TcpStream _stream;
@@ -647,6 +686,7 @@ class HttpRequestMessage
         HttpVersion _version;
         Uri _uri;
         HttpContent _content;
+        NetworkCredential _credentials;
 
     public:
         @property {
@@ -682,6 +722,12 @@ class HttpRequestMessage
                 _content = content;
             }
 
+            NetworkCredential credentials() {
+                return _credentials;
+            }
+            void credentials(NetworkCredential credentials) {
+                _credentials = credentials;
+            }
         }
 
         void send(TcpStream stream) {
@@ -696,6 +742,9 @@ class HttpRequestMessage
             };
             writeHeader("%s %s HTTP/%s".format(_method, path, _version.toString));
             writeHeader("Host: %s".format(_uri.host));
+            if(_credentials) {
+                writeHeader("Authorization: %s".format(_credentials.authorizationHeader));
+            }
 
             ubyte[] entity;
             if(this.content !is null) {
@@ -792,6 +841,7 @@ class HttpClient
 {
     private:
         Uri _rootUri;
+        NetworkCredential _credentials;
     public:
         this(string rootUri) {
             this(Uri(rootUri));
@@ -799,11 +849,18 @@ class HttpClient
 
         this(Uri rootUri) {
             _rootUri = rootUri;
+            if(rootUri.userInfo) {
+                _credentials = new NetworkCredential(rootUri);
+            }
         }
 
         @property {
             Uri rootUri() nothrow pure {
                 return _rootUri;
+            }
+
+            NetworkCredential credentials() {
+                return _credentials;
             }
         }
 
@@ -816,6 +873,7 @@ class HttpClient
             TcpStream stream = new TcpStream;
             stream.connect(uri.host, port);
             auto request = new HttpRequestMessage;
+            request.credentials = _credentials;
             request.method = method;
             request.uri = uri;
             request.protocolVersion = HttpVersion(1,0);
@@ -847,6 +905,7 @@ class HttpClient
             TcpStream stream = new TcpStream;
             stream.connect(uri.host, port);
             auto request = new HttpRequestMessage;
+            request.credentials = _credentials;
             request.method = "GET";
             request.uri = uri;
             request.protocolVersion = HttpVersion(1,0);
