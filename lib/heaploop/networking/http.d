@@ -433,6 +433,9 @@ class HttpResponse {
                     case 422:
                         _statusText = "UNPROCESSABLE ENTITY";
                         break;
+                    case 500:
+                        _statusText = "INTERNAL SERVER ERROR";
+                        break;
                     default:
                         throw new Exception(std.string.format("Unknown HTTP status code %s... pull request time?", _statusCode));
                 }
