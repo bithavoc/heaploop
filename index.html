@@ -1,0 +1,116 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="">
+    <meta name="author" content="">
+    <link rel="shortcut icon" href="../../assets/ico/favicon.ico">
+
+    <title>Heaploop: Application Framework for D programming language</title>
+
+    <!-- Bootstrap core CSS -->
+    <link href="bootstrap/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Custom styles for this template -->
+    <link href="stylesheets/style.css" rel="stylesheet">
+
+    <!-- Just for debugging purposes. Don't actually copy this line! -->
+    <!--[if lt IE 9]><script src="../../assets/js/ie8-responsive-file-warning.js"></script><![endif]-->
+
+    <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!--[if lt IE 9]>
+        <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+        <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
+        <![endif]-->
+    </head>
+
+    <body role="document">
+
+        <a href="https://github.com/bithavoc/heaploop"><img style="position: absolute; top: 0; right: 0; border: 0; z-index:100000000;" src="https://camo.githubusercontent.com/365986a132ccd6a44c23a9169022c0b5c890c387/68747470733a2f2f73332e616d617a6f6e6177732e636f6d2f6769746875622f726962626f6e732f666f726b6d655f72696768745f7265645f6161303030302e706e67" alt="Fork me on GitHub" data-canonical-src="https://s3.amazonaws.com/github/ribbons/forkme_right_red_aa0000.png"></a>
+        <div class="navbar navbar-inverse navbar-fixed-top" role="navigation">
+            <div class="container">
+                <div class="navbar-header">
+                    <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                        <span class="sr-only">Toggle navigation</span>
+                        <span class="icon-bar"></span>
+                        <span class="icon-bar"></span>
+                        <span class="icon-bar"></span>
+                    </button>
+                    <a class="navbar-brand" href="#">Heaploop</a>
+                </div>
+                <div class="navbar-collapse collapse">
+                    <ul class="nav navbar-nav">
+                        <li><a href="http://heaploop.io">Home</a></li>
+                        <li><a href="http://github.com/bithavoc/heaploop">Source Code</a></li>
+                        <li><a href="/about.html">About</a></li>
+                      
+                    </ul>
+                </div><!--/.nav-collapse -->
+            </div>
+        </div>
+        <div class="container">
+            <div class="jumbotron">
+                <h1>Synchronous, Concurrent, Non-Blocking Application Framework for D</h1>
+                <p><a class="btn btn-lg btn-success" href="http://github.com/heapsource/heaploop" role="button">dub install heaploop</a></p>
+            </div>
+
+            <div class="row marketing">
+                <div class="col-lg-8">
+                    <h4>Concurrency Model</h4>
+                    <p>Activate Fibered-Concurrency for any <a class="highlighted" href="https://github.com/heapsource/events.d">event</a> just by switching subscription operators:</p>
+                </div>
+                <div class="col-lg-8">
+                    <h5>Non-Concurrent Application:</h5>
+                    <p class="snippet">
+server.listen ^= (client){<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;// executes in the same calling fiber.<br/>
+};<br/></p>
+                </div>
+                <div class="col-lg-8">
+                    <h5><a class="highlighted" href="https://github.com/heapsource/events.d">Concurrent</a> Application:</h5>
+                    <p class="snippet">
+                    server.listen <a class="highlighted" href="https://github.com/heapsource/events.d">^^=</a> (client){<br/>
+                    &nbsp;&nbsp;&nbsp;&nbsp;// executes in a new <a class="highlighted" href="http://dlang.org/phobos/core_thread.html#.Fiber">fiber</a>.<br/>
+                    };<br/></p>
+                </div>
+                <div class="col-lg-8">
+                    <h5>Example TCP Server:</h5>
+                    <p class="snippet">
+                        <span class="reserved">import</span> heaploop.looping;<br/>
+                        <span class="reserved">import</span> heaploop.networking.tcp;<br/>
+<br/>
+                        <span class="reserved">void</span> main() {<br/>
+                          &nbsp;&nbsp;&nbsp;&nbsp;loop  <a class="highlighted" href="https://github.com/heapsource/events.d">^^=</a> {<br/>
+                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;auto server = new TcpStream;<br/>
+                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;server.bind(3000);<br/>
+                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;server.listen  <a class="highlighted" href="https://github.com/heapsource/events.d">^^=</a>  {<br/>
+                                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;client.write(<span class="reserved">cast</span>(<span class="reserved">ubyte</span>[])”Hello World”);<br/>
+                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;};<br/>
+                          &nbsp;&nbsp;&nbsp;&nbsp;};<br/>
+                        }<br/>
+                    </p>
+                </div>
+            </div>
+            <div class="row marketing">
+                <div class="col-lg-8">
+                        <h4>Under the Hood</h4>
+                        <p>Heaploop is built on top of <a class="highlighted" href="https://github.com/joyent/libuv">libuv</a>'s high-perfomance and cross-platform capabilities.
+            The rest is bare-metal perfomance, like it’s supposed to be.</p>
+                </div>
+            </div>
+            <div class="footer">
+                <p>&copy; <a class="highlighted" href="http://bithavoc.io">BitHavoc</a> 2012, 2014</p>
+            </div>
+        </div> <!-- /container -->
+
+
+        <!-- Bootstrap core JavaScript
+            ================================================== -->
+            <!-- Placed at the end of the document so the pages load faster -->
+            <script src="//ajax.googleapis.com/ajax/libs/jquery/1.11.0/jquery.min.js"></script>
+            <script src="bootstrap/js/bootstrap.min.js"></script>
+        </body>
+        </html>

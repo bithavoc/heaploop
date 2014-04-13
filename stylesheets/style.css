@@ -1,0 +1,135 @@
+/* Space out content a bit */
+body {
+  padding-top: 20px;
+  padding-bottom: 20px;
+  background-color: #555555;
+  color: #F4F2DC;
+}
+
+/* Everything but the jumbotron gets side spacing for mobile first views */
+.header,
+.marketing,
+.footer {
+  padding-right: 15px;
+  padding-left: 15px;
+}
+
+/* Custom page header */
+.header {
+  border-bottom: 1px solid #e5e5e5;
+}
+/* Make the masthead heading the same height as the navigation */
+.header h3 {
+  padding-bottom: 19px;
+  margin-top: 0;
+  margin-bottom: 0;
+  line-height: 40px;
+}
+
+/* Custom page * */
+.footer {
+  padding-top: 19px;
+  border-top: 1px solid #e5e5e5;
+}
+
+/* Customize container */
+@media (min-width: 768px) {
+  .container {
+    max-width: 750px;
+  }
+}
+.container-narrow > hr {
+  margin: 30px 0;
+}
+
+/* Main marketing message and sign up button */
+.jumbotron {
+  text-align: center;
+  border-bottom: 1px solid #e5e5e5;
+  border-width: 0px 0px 0px 0px;
+  background-color: inherit;
+}
+.jumbotron .btn {
+  background-color: #292828;
+  border-radius: 0px;
+  border-width: 0px;
+  padding: 14px 24px;
+  font-size: 21px;
+}
+.jumbotron .btn , .highlighted {
+    color: #FF5828;
+}
+
+/* Supporting marketing content */
+.marketing {
+  margin: 40px 0;
+}
+.marketing p + h4 {
+  margin-top: 28px;
+}
+
+.jumbotron h1 {
+  font-size: 32px;
+  margin-bottom: 40px;
+}
+
+.nav-pills>li>a {
+  border-radius: 0px;
+  color: #A2A191;
+}
+a {
+    color: #6C9273;
+}
+.nav-pills>li>a:hover {
+  background-color: transparent;
+  color: #6C9273;
+}
+
+.navbar-inverse {
+    background-color: #292828;
+}
+
+h4 {
+  color:#F4F2DC;
+}
+
+.snippet {
+    background-color: #292828;
+    padding: 15px;
+}
+
+.reserved {
+    color: #F4E87A;
+}
+
+.footer {
+    border-top: 0px;
+}
+
+/* Responsive: Portrait tablets and up */
+@media screen and (min-width: 768px) {
+  /* Remove the padding we set earlier */
+  .header,
+  .marketing,
+  .footer {
+    padding-right: 0;
+    padding-left: 0;
+  }
+  /* Space out the masthead */
+  .header {
+    margin-bottom: 30px;
+  }
+  .navbar-nav {
+      float: right;
+  }
+  /* Remove the bottom border on the jumbotron for visual effect */
+  .jumbotron {
+    border-bottom: 0;
+  }
+}
+
+@media (max-width: 768px) {
+    .container>.navbar-header {
+        margin-right: 110px;
+    }
+}
