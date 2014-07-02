@@ -82,6 +82,10 @@ abstract class HttpConnectionBase : Looper {
             onProcessMessage();
         }
 
+        void _onStatusComplete(HttpParser parser, string statusLine) {
+            onStatusComplete(statusLine, parser.statusCode);
+        }
+
         void onBody(HttpParser parser, HttpBodyChunk chunk) {
             debug writeln("HTTP Response Message: read some BODY data: ", chunk.buffer);
             auto cx = _currentMessage._ensureReadOperation();
@@ -136,6 +140,10 @@ package:
         abstract void onBeforeProcess();
         
         abstract void onProcessMessage();
+        
+        void onStatusComplete(string statusLine, uint statusCode) {
+
+        }
 
         void startProcessing() {
             try {
@@ -162,6 +170,7 @@ package:
             _parser.onHeader = &onHeader;
             _parser.onHeadersComplete = &onHeadersComplete;
             _parser.onMessageComplete = &onMessageComplete;
+            _parser.onStatusComplete = &_onStatusComplete;
             _parser.onUrl = &onUrl;
             _parser.onBody = &onBody;
         }
@@ -763,10 +772,23 @@ class HttpRequestMessage
 
 class HttpResponseMessage : HttpIncomingMessage
 {
+    private:
+        uint _statusCode;
+
     public:
         this(HttpClientConnection connection)
         {
             super(connection);
+        }
+
+        @property {
+            uint statusCode() {
+                return _statusCode;
+            }
+
+            void statusCode(uint code) {
+                _statusCode = code;
+            }
         }
 }
 
@@ -791,6 +813,10 @@ class HttpClientConnection : HttpConnection!HttpResponseMessage {
         
          override void onProcessMessage() {
             _responseCallback(currentMessage);
+         }
+
+         override void onStatusComplete(string statusLine, uint statusCode) {
+            currentMessage.statusCode = statusCode; 
          }
     
     public:
@@ -890,6 +916,10 @@ class HttpClient
 
         HttpResponseMessage post(string path, HttpContent content = null) {
             return send("POST", path, content);
+        }
+
+        HttpResponseMessage post(string path, string[string] fields) {
+            return post(path, new FormUrlEncodedContent(fields));
         }
 
         HttpResponseMessage put(string path, HttpContent content = null) {
