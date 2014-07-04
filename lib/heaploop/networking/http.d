@@ -435,7 +435,7 @@ class HttpResponse {
                 foreach(header; _headers) {
                     lineWrite(header.name ~ " : " ~ header.value);
                 }
-                lineWrite("Content-Type: %s; charset=UTF-8".format(_contentType));
+                lineWrite("Content-Type: %s".format(_contentType));
                 if(_chunked) {
                     lineWrite("Transfer-Encoding: chunked");
                 } else {
@@ -674,7 +674,8 @@ string encodeURLForm(FormFields fields) {
         text.put("=");
         text.put(fields[name].encodeComponent.encodeFormComponent);
     }
-    return text.data;
+    string txt = text.data;
+    return txt;
 }
 
 /*
@@ -682,6 +683,7 @@ string encodeURLForm(FormFields fields) {
  */
 
 ushort inferPortForUriSchema(string schema) {
+
     switch(schema) {
         case "http": return 80;
         default: assert(0, "Unable to infer port number for schema %s".format(schema));
@@ -761,6 +763,7 @@ class HttpRequestMessage
                     entity ~= d;
                 });
                 writeHeader("Content-Length: %d".format(entity.length));
+                writeHeader("Content-Type: %s".format(this.content.contentType));
             }
             writeHeader("");
             if(entity.length > 0) {
@@ -838,6 +841,8 @@ class HttpClientConnection : HttpConnection!HttpResponseMessage {
 abstract class HttpContent {
     public:
         abstract void writeTo(void delegate(ubyte[] data) writer);
+
+        @property abstract string contentType();
 }
 
 class UbyteContent: HttpContent {
@@ -854,12 +859,19 @@ class UbyteContent: HttpContent {
                 writer(_buffer);
             }
         }
+
+        @property override string contentType() {
+            return "application/octet-stream";
+        }
 }
 
 class FormUrlEncodedContent : UbyteContent {
     public:
         this(string[string] fields) {
             super(cast(ubyte[])encodeURLForm(fields));
+        }
+        @property override string contentType() {
+            return "application/x-www-form-urlencoded";
         }
 }
 
