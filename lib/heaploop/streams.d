@@ -101,15 +101,54 @@ abstract class Stream : Handle {
             });
         }
 
+        ubyte[] readOnce() {
+            ensureOpen;
+            if(_isReading) {
+                throw new Exception("Stream is already reading");
+            }
+            _isReading = true;
+            auto rx = _readOperation = new readOperationContext(this);
+            duv_read_start(this.handle, rx, (uv_stream_t * client_conn, Object readContext, ptrdiff_t nread, ubyte[] data) {
+                    int status = cast(int)nread;
+                    auto rx = cast(readOperationContext)readContext;
+                    rx.update(status);
+                    Stream thisStream = rx.target;
+                    rx.readData = data;
+                    if(status.isError) {
+                        // we must close inmediately we receive the error and before continue in the fiber
+                        rx.target.close();
+                    }
+                    rx.resume();
+            });
+            scope (exit) stopReading();
+            debug std.stdio.writeln("read (activated block) will yield");
+            rx.yield;
+            debug std.stdio.writeln("read (activated block) continue after yield");
+            try {
+                rx.completed;
+            } catch(LoopException lex) {
+                if(lex.name == "EOF") {
+                    debug std.stdio.writeln("EOF detected, forcing close");
+                    close();
+                } else {
+                    debug std.stdio.writeln("error detected, forcing close");
+                    close();
+                    throw lex;
+                }
+            }
+            return rx.readData;
+        }
+
         void stopReading() {
             // [WARNING] might be executed from fiber or thread
             if(_isReading) {
                 debug std.stdio.writeln("stopReading");
                 duv_read_stop(this.handle);
                 _isReading = false;
-                if(_readOperation !is null) {
+                if(_readOperation) {
                     _readOperation.stopped = true;
                     _readOperation.resume;
+                    _readOperation = null;
                 }
             }
         }
