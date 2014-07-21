@@ -56,6 +56,28 @@ class NetworkCredential {
         }
 }
 
+enum HttpParserEventType : ubyte {
+    Unknown,
+    MessageBegin,
+    Url,
+    Header,
+    HeadersComplete,
+    StatusComplete,
+    Body,
+    MessageComplete
+}
+
+struct HttpParserEvent {
+        union Store {
+             string str; 
+             HttpBodyChunk chunk;
+             HttpHeader header;
+        }
+
+        Store store;
+        HttpParserEventType type;
+}
+
 abstract class HttpConnectionBase : Looper {
     private:
         TcpStream _stream;
@@ -63,42 +85,50 @@ abstract class HttpConnectionBase : Looper {
 
         HttpIncomingMessage _currentMessage;
 
+        HttpParserEvent[] _parserEvents;
+
         void _onMessageBegin(HttpParser p) {
             debug std.stdio.writeln("HTTP message began");
-            _currentMessage = createMessage();
-            onMessageBegin();
+            HttpParserEvent ev;
+            ev.type = HttpParserEventType.MessageBegin;
+            _parserEvents ~= ev;
         }
 
         void onUrl(HttpParser p, string uri) {
-            _currentMessage.rawUri = uri;
-            _currentMessage.uri = Uri(_currentMessage.rawUri);
+            HttpParserEvent ev;
+            ev.type = HttpParserEventType.Url;
+            ev.store.str = _currentMessage.rawUri;
+            _parserEvents ~= ev;
         }
 
         void onHeadersComplete(HttpParser p) {
-            _currentMessage.protocolVersion = p.protocolVersion;
-            _currentMessage.transmissionMode = p.transmissionMode;
-            debug std.stdio.writeln("protocol version set, ", p.protocolVersion.toString);
-            onBeforeProcess();
-            onProcessMessage();
+            HttpParserEvent ev;
+            ev.type = HttpParserEventType.HeadersComplete;
+            _parserEvents ~= ev;
         }
 
         void _onStatusComplete(HttpParser parser, string statusLine) {
-            onStatusComplete(statusLine, parser.statusCode);
+            HttpParserEvent ev;
+            ev.type = HttpParserEventType.StatusComplete;
+            ev.store.str = statusLine;
+            _parserEvents ~= ev;
         }
 
         void onBody(HttpParser parser, HttpBodyChunk chunk) {
-            debug writeln("HTTP Response Message: read some BODY data: ", chunk.buffer);
-            auto cx = _currentMessage._ensureReadOperation();
-            cx.buffer(chunk);
-            cx.resume;
+            HttpParserEvent ev;
+            ev.type = HttpParserEventType.Body;
+            ev.store.chunk = chunk;
+            _parserEvents ~= ev;
         }
 
         void onHeader(HttpParser p, HttpHeader header) {
-            _currentMessage.addHeader(header);
+            HttpParserEvent ev;
+            ev.type = HttpParserEventType.Header;
+            ev.store.header = header;
+            _parserEvents ~= ev;
         }
 
         void onMessageComplete(HttpParser p) {
-            debug std.stdio.writeln("protocol version set, ", p.protocolVersion.toString);
         }
 
         void _stopProcessing() {
@@ -145,12 +175,61 @@ package:
 
         }
 
-        void startProcessing() {
+        bool _linkProcessing(string requester)() {
+            bool isNewMessage = false;
             try {
-                debug std.stdio.writeln("Reading to Process HTTP Requests");
-                _stream.read ^= (data) {
-                    _parser.execute(data);
-                };
+                debug std.stdio.writeln(requester ~ " Linked to reading to Process HTTP Requests");
+                if(!_stream.isOpen) {
+                    return false;
+                }
+                ubyte[] data = _stream.readOnce();
+                if(data.length == 0) {
+                    return false;
+                }
+                debug std.stdio.writeln("Readed bytes ", data.length);
+                _parserEvents = null;
+                _parser.execute(data);
+                foreach(ref HttpParserEvent ev; _parserEvents) {
+                    switch(ev.type) {
+                        case HttpParserEventType.MessageBegin: 
+                            _currentMessage = createMessage();
+                            onMessageBegin();
+                            break;
+                        case HttpParserEventType.Url:
+                            _currentMessage.rawUri = ev.store.str;
+                            _currentMessage.uri = Uri(_currentMessage.rawUri);
+                            break;
+                        case HttpParserEventType.Header:
+                            _currentMessage.addHeader(ev.store.header);
+                            break;
+                        case HttpParserEventType.HeadersComplete:
+                            _currentMessage.protocolVersion = _parser.protocolVersion;
+                            _currentMessage.transmissionMode = _parser.transmissionMode;
+                            debug std.stdio.writeln("protocol version set, ", _currentMessage.protocolVersion.toString);
+                            isNewMessage = true;
+                            break;
+                        case HttpParserEventType.StatusComplete:
+                            onStatusComplete(ev.store.str, _parser.statusCode);
+                            break;
+                        case HttpParserEventType.Body:
+                            auto chunk = ev.store.chunk;
+                            debug writeln("HTTP Response Message: read some BODY data (", chunk.buffer.length, " bytes) ", " is final ", chunk.isFinal, ": ", chunk.buffer);
+                            debug writeln("onBody ", cast(string)chunk.buffer);
+                            if(_currentMessage._isProcessingLinked) {
+                                // trigger the body read action directly
+                                _currentMessage._readTrigger(chunk);
+                                if(chunk.isFinal) {
+                                    _currentMessage._isReadingComplete = true;
+                                }
+                                debug writeln("Chunk delivered directly");
+                            } else {
+                                // it's the first buffer, save it and unlink processing
+                                _currentMessage._bufferedChunk = chunk;
+                                debug writeln("Chunk buffered until the incoming message reads");
+                            }
+                            break;
+                    }
+                }
             } catch(LoopException lex) {
                 if(lex.name == "EOF")  {
                     debug std.stdio.writeln("Connection closed");
@@ -158,8 +237,19 @@ package:
                     throw lex;
                 }
             }
-            debug std.stdio.writeln("Stopped processing requests");
-            _stopProcessing();
+            if(isNewMessage) {
+                onBeforeProcess();
+                // read
+                onProcessMessage();
+            }
+
+            static if(requester != "HttpIncomingMessage") {
+                debug std.stdio.writeln(requester ~ " HTTP link looping");
+                _linkProcessing!requester();
+            } else {
+                debug std.stdio.writeln(requester ~ " HTTP link completed");
+            }
+            return true;
         }
 
     public:
@@ -178,7 +268,7 @@ package:
 
         void stop() {
            debug std.stdio.writeln("Stopping connection");
-           _stopProcessing;
+           _stopProcessing();
         }
 
         @property {
@@ -260,44 +350,22 @@ abstract class HttpIncomingMessage : HttpMessage
     private:
         string _rawUri;
         Uri _uri;
-        readOperation _readOperation;
-        HttpConnectionBase connection;
+        HttpConnectionBase _connection;
         HttpBodyTransmissionMode _transmissionMode;
     package:
 
-        class readOperation : OperationContext!HttpIncomingMessage {
-            public:
-               HttpBodyChunk bufferedChunk;
-               bool stopped;
-               this(HttpIncomingMessage target) {
-                   super(target);
-               }
-               @property bool hasBufferedChunk() {
-                   return bufferedChunk.buffer.length > 0;
-               }
-               HttpBodyChunk consumeBufferedChunk() {
-                   scope (exit) {
-                       bufferedChunk = HttpBodyChunk.init;
-                   }
-                   return bufferedChunk;
-               }
-               void buffer(HttpBodyChunk chunk) {
-                   this.bufferedChunk = HttpBodyChunk(bufferedChunk.buffer ~ chunk.buffer, chunk.isFinal);
-                   this.stopped = this.bufferedChunk.isFinal;
-               }
-        }
+        // first chunk of the body buffer
+        HttpBodyChunk _bufferedChunk;
+        bool _isProcessingLinked;
+        bool _isReadingComplete;
 
-        readOperation _ensureReadOperation() {
-            if(_readOperation is null) {
-                return _readOperation = new readOperation(this);
-            }
-            return _readOperation;
-        }
         @property {
             void transmissionMode(HttpBodyTransmissionMode mode) {
                 _transmissionMode = mode;
             }
         }
+
+        void delegate(HttpBodyChunk) _readTrigger;
 
 
     public:
@@ -307,24 +375,27 @@ abstract class HttpIncomingMessage : HttpMessage
             }
             body {
                 super(connection.loop);
+                this._connection = connection;
             }
 
             Action!(void, HttpBodyChunk) read() {
                 return new Action!(void, HttpBodyChunk)((a) {
-                   if(this.shouldRead) {
-                       auto cx = _ensureReadOperation();
-                       do {
-                           if(cx.hasBufferedChunk) {
-                                debug writeln("HTTP Response Message: delivering buffered data");
-                                a(cx.consumeBufferedChunk());
-                           }
-                           if(cx.stopped) {
-                                break;
-                           }
-                           cx.yield;
-                           cx.completed;
-                       } while(cx.hasBufferedChunk);
+                   _readTrigger = a;
+                   // if there is a chunk buffered, deliver it
+                   if(this._bufferedChunk.buffer.length > 0) {
+                        a(this._bufferedChunk);
+                        this._bufferedChunk = HttpBodyChunk.init;
                    }
+                   _isProcessingLinked = true;
+                   while(this.shouldRead && !this._isReadingComplete) {
+                       // process connection messages here
+                       // so it blocks while reading
+                       bool shouldContinueReading = this._connection._linkProcessing!"HttpIncomingMessage"();
+                       if(!shouldContinueReading){
+                            break;
+                       }
+                   }
+                   _isProcessingLinked = false;
                 });
             }
         @property {
@@ -345,7 +416,8 @@ abstract class HttpIncomingMessage : HttpMessage
                 _uri = uri;
             }
 
-            bool shouldRead() nothrow pure {
+            bool shouldRead() {
+                writeln("Transmission Mode ", this.transmissionMode, " should read ", this.transmissionMode.shouldRead);
                 return this.transmissionMode.shouldRead;
             }
 
@@ -592,7 +664,7 @@ class HttpServerConnection : HttpConnection!HttpRequest {
             if(_processAction is null) {
                 _processAction = new processEventList((trigger) {
                     _processCallback = trigger;
-                    startProcessing();
+                    _linkProcessing!"HttpServerConnection";
                 });
             }
             return _processAction;
@@ -831,7 +903,7 @@ class HttpClientConnection : HttpConnection!HttpResponseMessage {
             if(_responseAction is null) {
                 _responseAction = new responseAction((trigger) {
                     _responseCallback = trigger;
-                    startProcessing();
+                    _linkProcessing!"HttpClientConnection"();
                 });
             }
             return _responseAction;
@@ -902,63 +974,66 @@ class HttpClient
             }
         }
 
-        HttpResponseMessage send(string method, string path, HttpContent content = null) {
-            Uri uri = Uri(_rootUri.toString ~ path);
-            ushort port = uri.port;
-            if(port == 0) {
-                port = inferPortForUriSchema(uri.schema);
-            }
-            TcpStream stream = new TcpStream;
-            stream.connect(uri.host, port);
-            auto request = new HttpRequestMessage;
-            request.credentials = _credentials;
-            request.method = method;
-            request.uri = uri;
-            request.protocolVersion = HttpVersion(1,0);
-            request.content = content;
-            request.send(stream);
-            auto connection = new HttpClientConnection(stream);
-            HttpResponseMessage response;
-            connection.response ^= (r) {
-                response = r;
-                connection.stop;
-            };
-            return response;
+        StrictAction!(StrictTrigger.Sync, void, HttpResponseMessage) send(string method, string path, HttpContent content = null) {
+            return new StrictAction!(StrictTrigger.Sync, void, HttpResponseMessage)((trigger) {
+                Uri uri = Uri(_rootUri.toString ~ path);
+                ushort port = uri.port;
+                if(port == 0) {
+                    port = inferPortForUriSchema(uri.schema);
+                }
+                TcpStream stream = new TcpStream;
+                debug writeln("HOST ", uri.host, port);
+                stream.connect(uri.host, port);
+                auto request = new HttpRequestMessage;
+                request.credentials = _credentials;
+                request.method = method;
+                request.uri = uri;
+                request.protocolVersion = HttpVersion(1,0);
+                request.content = content;
+                request.send(stream);
+                auto connection = new HttpClientConnection(stream);
+                HttpResponseMessage response;
+                connection.response ^= (r) {
+                    trigger(r);
+                };
+            });
         }
 
-        HttpResponseMessage post(string path, HttpContent content = null) {
+        StrictAction!(StrictTrigger.Sync, void, HttpResponseMessage) post(string path, HttpContent content = null) {
             return send("POST", path, content);
         }
 
-        HttpResponseMessage post(string path, string[string] fields) {
+        StrictAction!(StrictTrigger.Sync, void, HttpResponseMessage) post(string path, string[string] fields) {
             return post(path, new FormUrlEncodedContent(fields));
         }
 
-        HttpResponseMessage put(string path, HttpContent content = null) {
+        StrictAction!(StrictTrigger.Sync, void, HttpResponseMessage) put(string path, HttpContent content = null) {
             return send("PUT", path, content);
         }
 
-        HttpResponseMessage get(string path) {
-            Uri uri = Uri(_rootUri.toString ~ path);
-            ushort port = uri.port;
-            if(port == 0) {
-                port = inferPortForUriSchema(uri.schema);
-            }
-            TcpStream stream = new TcpStream;
-            stream.connect(uri.host, port);
-            auto request = new HttpRequestMessage;
-            request.credentials = _credentials;
-            request.method = "GET";
-            request.uri = uri;
-            request.protocolVersion = HttpVersion(1,0);
-            request.send(stream);
-            auto connection = new HttpClientConnection(stream);
-            HttpResponseMessage response;
-            connection.response ^= (r) {
-                response = r;
-                connection.stop;
-            };
-            return response;
+        StrictAction!(StrictTrigger.Sync, void, HttpResponseMessage) get(string path) {
+            return new StrictAction!(StrictTrigger.Sync, void, HttpResponseMessage)((trigger) {
+                Uri uri = Uri(_rootUri.toString ~ path);
+                ushort port = uri.port;
+                if(port == 0) {
+                    port = inferPortForUriSchema(uri.schema);
+                }
+                TcpStream stream = new TcpStream;
+                debug writeln("HOST ", uri.host, port);
+                stream.connect(uri.host, port);
+                auto request = new HttpRequestMessage;
+                request.credentials = _credentials;
+                request.method = "GET";
+                request.uri = uri;
+                request.protocolVersion = HttpVersion(1,0);
+                request.send(stream);
+                auto connection = new HttpClientConnection(stream);
+                HttpResponseMessage response;
+                connection.response ^= (r) {
+                    trigger(r);
+                    //connection.stop;
+                };
+            });
         }
 }
 

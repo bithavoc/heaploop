@@ -10,5 +10,9 @@ void main() {
         stream.read ^= (data) {
             writeln("Bytes Read from Server: ", data.length);
         };
+        /*while(true) {
+            auto data = stream.readOnce();
+            writeln("Bytes Read from Server: ", data.length);
+        }*/
     };
 }
